@@ -12,22 +12,139 @@ import {
 
 import { Card, MetricCard, withAlpha } from "../components";
 import { NAV, BLUE, RED, PURPLE, AMBER, BROWN, PIE_COLORS } from "../constants/colors";
-import { loanTrendData, demographicsData, annualData, BRANCHES } from "../data";
+import {
+  getIdleBooksCount,
+  getDamagePendingCount,
+  getTransferPendingCount,
+  getMonthlyLoans,
+  getUsersDistribution,
+  getLibraryNetworkDistances,
+} from "../api/dashboard";
 
-// 아직 books/inspections/RELOCATION_QUEUE 등 실데이터와 연결되지 않은 요약 지표(전체 시스템 규모를
-// 나타내는 값들로, 샘플로 들어있는 books 배열(16권) 기준으로 계산하면 오히려 실제 서비스 규모와 안 맞음).
-// 데이터가 준비되면 이 값들을 실제 계산식으로 교체할 것.
-const SNAPSHOT_STATS = {
-  lowTurnoverBooks: { value: "416", trend: "-6.1%" },
-  pendingWearReview: { value: "89", trend: "+12" },
-  pendingRelocationReview: { value: "47" },
-};
+// ---- 화면에서 쓰는 로컬 도메인 타입 (기존 mock 데이터 형태 유지) ----
+interface LoanTrendPoint { month: string; collection: number; loans: number; turnover: number }
+interface DemographicPoint { age: string; count: number; pct: number }
+interface Branch {
+  id: string;
+  name: string;
+  district: string;
+  collection: number;
+  distance: number;
+  hub: boolean;
+}
+
+const AGE_LABELS = {
+  ageUnder10: "10대 이하",
+  age10s: "10대",
+  age20s: "20대",
+  age30s: "30대",
+  age40s: "40대",
+  age50s: "50대",
+  age60Plus: "60대 이상",
+} as const;
+
+const HUB_LIBRARY_NAME = "북수원도서관";
 
 export function OverviewPage() {
-  const regMembers = demographicsData.reduce((s, d) => s + d.count, 0);
-  const totalCollection = BRANCHES.reduce((s, b) => s + b.collection, 0);
-  const hubCollection = BRANCHES.find((b) => b.hub)?.collection ?? totalCollection;
-  const latestAnnual = annualData[annualData.length - 1];
+  const [loanTrendData, setLoanTrendData] = useState<LoanTrendPoint[]>([]);
+  const [demographicsData, setDemographicsData] = useState<DemographicPoint[]>([]);
+  const [regMembers, setRegMembers] = useState(0);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [hubCollection, setHubCollection] = useState(0);
+  const [hubBooksDelta, setHubBooksDelta] = useState(0);
+
+  const [snapshotStats, setSnapshotStats] = useState({
+    lowTurnoverBooks: { value: "0", trend: "0%" },
+    pendingWearReview: { value: "0" },
+    pendingRelocationReview: { value: "0" },
+  });
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDashboard() {
+      try {
+        setLoading(true);
+        const [
+          idleBooks,
+          damagePending,
+          transferPending,
+          monthlyLoans,
+          usersDistribution,
+          libraryNetwork,
+        ] = await Promise.all([
+          getIdleBooksCount(),
+          getDamagePendingCount(),
+          getTransferPendingCount(),
+          getMonthlyLoans(),
+          getUsersDistribution(),
+          getLibraryNetworkDistances(),
+        ]);
+
+        if (cancelled) return;
+
+        // 유휴화 도서
+        const pct = idleBooks.percentageChange;
+        setSnapshotStats({
+          lowTurnoverBooks: {
+            value: idleBooks.currentMonthCount.toLocaleString(),
+            trend: `${pct >= 0 ? "+" : ""}${pct}%`,
+          },
+          // 파손 심사 대기
+          pendingWearReview: { value: damagePending.count.toLocaleString() },
+          // 이관 검토 대기
+          pendingRelocationReview: { value: transferPending.count.toLocaleString() },
+        });
+
+        // 월별 대출 추이 + 소장 도서 수(최신월 기준)
+        const trend: LoanTrendPoint[] = monthlyLoans.data.map((d) => {
+          const [, m] = d.date.split("-");
+          return {
+            month: `${parseInt(m, 10)}월`,
+            collection: d.totalBooks,
+            loans: d.totalLoans,
+            turnover: d.turnoverRate,
+          };
+        });
+        setLoanTrendData(trend);
+        const latestMonth = monthlyLoans.data[monthlyLoans.data.length - 1];
+        setHubCollection(latestMonth?.totalBooks ?? 0);
+        setHubBooksDelta(latestMonth?.booksDelta ?? 0);
+
+        // 연령대 분포
+        const dist = usersDistribution.data.ageDistribution;
+        type AgeKey = keyof typeof dist;
+        const demo: DemographicPoint[] = (Object.keys(AGE_LABELS) as AgeKey[]).map((key) => ({
+          age: AGE_LABELS[key],
+          count: dist[key].count,
+          pct: dist[key].percentage,
+        }));
+        setDemographicsData(demo);
+        setRegMembers(usersDistribution.data.totalPopulation);
+
+        // 분관 네트워크
+        const branchList: Branch[] = libraryNetwork.data.map((b, i) => ({
+          id: `${b.libraryName}-${i}`,
+          name: b.libraryName,
+          district: b.address,
+          collection: b.bookCount,
+          distance: b.length,
+          hub: b.libraryName === HUB_LIBRARY_NAME,
+        }));
+        setBranches(branchList);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "데이터를 불러오지 못했습니다.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadDashboard();
+    return () => { cancelled = true; };
+  }, []);
 
   const chartWrapRef = useRef(null);
   const [chartWidth, setChartWidth] = useState(0);
@@ -40,7 +157,7 @@ export function OverviewPage() {
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [loading]);
 
   const demoCardRef = useRef(null);
   const [demoCardWidth, setDemoCardWidth] = useState(0);
@@ -53,7 +170,15 @@ export function OverviewPage() {
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [loading]);
+
+  if (loading) {
+    return <div className="p-6 text-sm text-muted-foreground">데이터를 불러오는 중입니다...</div>;
+  }
+
+  if (error) {
+    return <div className="p-6 text-sm text-red-500">{error}</div>;
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -77,22 +202,23 @@ export function OverviewPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MetricCard
           label="소장 도서 수" value={hubCollection.toLocaleString()} sub="총 소장 권수"
-          trend="+2.5%" color={NAV} icon={BookOpen} />
+          trend={`${hubBooksDelta >= 0 ? "+" : ""}${hubBooksDelta.toLocaleString()}권`}
+          color={NAV} icon={BookOpen} />
         <MetricCard
-          label="유휴화 도서" value={SNAPSHOT_STATS.lowTurnoverBooks.value} sub="전월 대비"
-          trend={SNAPSHOT_STATS.lowTurnoverBooks.trend} color={AMBER} icon={AlertTriangle} invertTrend />
+          label="유휴화 도서" value={snapshotStats.lowTurnoverBooks.value} sub="전월 대비"
+          trend={snapshotStats.lowTurnoverBooks.trend} color={AMBER} icon={AlertTriangle} invertTrend />
         <MetricCard
-          label="파손 심사 대기" value={SNAPSHOT_STATS.pendingWearReview.value} sub="사서 심사 미완료"
+          label="파손 심사 대기" value={snapshotStats.pendingWearReview.value} sub="사서 심사 미완료"
           color={PURPLE} icon={ClipboardList} />
         <MetricCard
-          label="이관 검토 대기" value={SNAPSHOT_STATS.pendingRelocationReview.value} sub="이관 미결정"
+          label="이관 검토 대기" value={snapshotStats.pendingRelocationReview.value} sub="이관 미결정"
           color={BLUE} icon={ArrowLeftRight} />
       </div>
 
       <Card className="p-4 flex flex-col">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-3">
           <div>
-            <h3 className="text-foreground">북수원도서관 월별 대출 현황 (2025년 7월 ~ 2026년 6월)</h3>
+            <h3 className="text-foreground">북수원도서관 월별 대출 현황</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
               소장 도서 수 · 대출 건수 · 평균 회전율
             </p>
@@ -132,8 +258,6 @@ export function OverviewPage() {
                 content={({ active, payload, label }) => {
                   if (!active || !payload?.length) return null;
                   const row = loanTrendData.find(d => d.month === label);
-                  // 버그 수정: row?.collection.toLocaleString() + "권" 형태는 row가 없을 때
-                  // "undefined권"이 그대로 찍혔음 -> 세 항목 모두 동일하게 삼항연산자로 가드
                   return (
                     <div className="bg-card border border-border rounded shadow-lg px-3 py-2.5 text-xs min-w-[190px]">
                       <p className="font-semibold text-foreground mb-2 pb-1.5 border-b border-border">{label}</p>
@@ -162,7 +286,6 @@ export function OverviewPage() {
                 stroke={BLUE} strokeWidth={2}
                 dot={{ r: 3, fill: BLUE, strokeWidth: 1.5, stroke: "#fff" }}
                 activeDot={{ r: 5, fill: BLUE, strokeWidth: 0 }} />
-              {/* 평균 회전율 — 강조 실선 (숨김 축 기준) */}
               <Line yAxisId="turnover" type="monotone" dataKey="turnover" name="평균 회전율"
                 stroke={RED} strokeWidth={2}
                 dot={{ r: 3, fill: RED, strokeWidth: 1.5, stroke: "#fff" }}
@@ -228,7 +351,7 @@ export function OverviewPage() {
           <h3 className="text-foreground mb-1">수원시 도서관 네트워크</h3>
           <p className="text-xs text-muted-foreground mb-3">이관 알고리즘 기준 분관 현황 (북수원도서관 기준)</p>
           <div className="flex flex-col gap-1.5">
-            {BRANCHES.map((b) => (
+            {branches.map((b) => (
               <div key={b.id} className="flex items-center gap-2.5 px-2.5 py-2 rounded border border-border">
                 <div className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0"
                   style={{ backgroundColor: withAlpha(b.hub ? NAV : BROWN, 0.08) }}>
@@ -261,10 +384,10 @@ export function OverviewPage() {
             ))}
           </div>
           <p className="text-[10px] text-muted-foreground mt-2 pt-2 border-t border-border">
-            총 {BRANCHES.length}개 분관
+            총 {branches.length}개 분관
           </p>
         </Card>
       </div>
-    </div >
+    </div>
   );
 }
