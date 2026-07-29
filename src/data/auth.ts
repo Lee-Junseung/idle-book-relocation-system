@@ -1,9 +1,8 @@
 // 로그인/회원가입/비밀번호 재설정을 처리하는 인증 모듈
-//
-// ⚠️ 중요: 이 모듈은 백엔드 서버 없이 브라우저 localStorage만으로 동작하는 데모/프로토타입용 구현입니다.
-// 비밀번호가 평문으로 저장되고, DEFAULT_ADMIN의 비밀번호도 소스코드에 그대로 노출되어 있어
-// 개발자도구로 누구나 모든 계정 정보를 열람할 수 있습니다. 실제 사용자 데이터를 다루는 배포 환경에서는
-// 반드시 서버 사이드 인증(해시+솔트 저장, 세션/토큰 검증 등)으로 교체해야 합니다.
+
+// 이 모듈은 백엔드 서버 없이 브라우저 localStorage만으로 동작하는 데모/프로토타입용 구현입니다.
+// 비밀번호가 평문으로 저장되고, DEFAULT_ADMIN의 비밀번호도 소스코드에 그대로 노출되어 있어 개발자도구로 누구나 모든 계정 정보를 열람할 수 있습니다.
+// 실제 사용자 데이터를 다루는 배포 환경에서는 반드시 서버 사이드 인증(해시+솔트 저장, 세션/토큰 검증 등)으로 교체해야 합니다.
 import { User, Session } from "../types";
 
 const USERS_KEY = "lib_users";
@@ -26,9 +25,6 @@ function loadUsers(): User[] {
   }
 }
 
-// 버그 수정: 기존엔 저장 실패(예: 프라이빗 브라우징 모드에서 localStorage 차단) 시에도
-// 호출부가 이를 알 방법이 없어 registerUser/resetPassword가 "성공"을 반환하고도 실제로는
-// 저장이 안 되는 경우가 있었음 -> 성공 여부를 boolean으로 반환하도록 수정
 function saveUsers(users: User[]): boolean {
   try {
     localStorage.setItem(USERS_KEY, JSON.stringify(users));
@@ -43,8 +39,6 @@ function findUser(id: string): User | undefined {
   return loadUsers().find((u) => u.id === id);
 }
 
-// 개선: User -> Session 변환 시 password를 제외한 4개 필드를 수동으로 나열하던 것을
-// 구조분해로 대체 (User에 필드가 추가돼도 자동으로 따라감)
 function toSession(user: User): Session {
   const { password: _password, ...session } = user;
   return session;
@@ -60,8 +54,6 @@ export function registerUser(user: User): { ok: true } | { ok: false; message: s
   return { ok: true };
 }
 
-// 개선: 기존엔 login()이 비밀번호가 포함된 User 전체를 반환해서, 호출부(LoginPage)가 매번 직접
-// 비밀번호를 제거하는 코드를 다시 작성해야 했음 -> 처음부터 Session(비밀번호 제외)을 반환
 export function login(id: string, password: string): { ok: true; session: Session } | { ok: false; message: string } {
   const user = findUser(id);
   if (!user) return { ok: false, message: "등록되지 않은 아이디입니다." };
@@ -96,7 +88,7 @@ export function resetPassword(id: string, name: string, email: string, newPasswo
 }
 
 export function logout() {
-  try { localStorage.removeItem(SESSION_KEY); } catch {}
+  try { localStorage.removeItem(SESSION_KEY); } catch { }
 }
 
 export function loadSession(): Session | null {

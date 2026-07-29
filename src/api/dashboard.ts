@@ -32,4 +32,4 @@ export const getUsersDistribution = (): Promise<UsersDistributionResponse> =>
     USE_MOCK ? getUsersDistributionMock() : apiGet("/api/dashboard/users/distribution");
 
 export const getLibraryNetworkDistances = (): Promise<LibraryNetworkResponse> =>
-    USE_MOCK ? getLibraryNetworkDistancesMock() : apiGet("/api/libraries/network-distances");
+    USE_MOCK ? getLibraryNetworkDistancesMock() : apiGet("/api/dashboard/libraries/network-distances");

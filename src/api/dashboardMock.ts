@@ -12,16 +12,21 @@ import type {
 export const getIdleBooksCountMock = (): Promise<IdleBooksCountResponse> =>
     mockDelay({
         success: true,
-        currentMonthCount: 416,
-        lastMonthCount: 200,
-        percentageChange: -3,
+        data: {
+            currentMonthCount: 416,
+            lastMonthCount: 200,
+            percentageChange: -3,
+        },
     });
 
 export const getDamagePendingCountMock = (): Promise<DamagePendingCountResponse> =>
-    mockDelay({ success: true, count: 89 });
+    mockDelay({
+        success: true,
+        data: { currentMonthCount: 89, lastMonthCount: 80, countChange: 9 },
+    });
 
 export const getTransferPendingCountMock = (): Promise<TransferPendingCountResponse> =>
-    mockDelay({ success: true, count: 47 });
+    mockDelay({ success: true, data: { count: 47 } });
 
 export const getMonthlyLoansMock = (): Promise<MonthlyLoansResponse> =>
     mockDelay({
@@ -70,6 +75,7 @@ export const getUsersDistributionMock = (): Promise<UsersDistributionResponse> =
 
 export const getLibraryNetworkDistancesMock = (): Promise<LibraryNetworkResponse> =>
     mockDelay({
+        success: true,
         data: BRANCHES.map((b) => ({
             libraryName: b.name,
             address: b.district,

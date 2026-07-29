@@ -2,8 +2,8 @@
 import { useState } from "react";
 import { ClipboardList, CalendarClock } from "lucide-react";
 import { Card, SectionHeader, InspectionChecklistModal } from "../components";
-import { NAV, AMBER } from "../constants/colors";
-import { withAlpha } from "../components";
+import { NAV } from "../constants/colors";
+import { IdleScoreBar } from "../components/IdleScoreBar";
 import { monthsSince } from "../data/wearUtils";
 import { Book, DamageInspection } from "../types";
 import { averageScore } from "../data/damageInspections";
@@ -65,9 +65,7 @@ export function WearQueuePage({
                 <tr className="border-b border-border">
                   <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">제목 / 저자</th>
                   <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">장르</th>
-                  <th className="hidden xl:table-cell px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">연 대출율</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">최근 대출일</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">경과 개월</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">유휴화 점수</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">점검 리스트</th>
                 </tr>
               </thead>
@@ -79,13 +77,8 @@ export function WearQueuePage({
                       <p className="text-sm text-muted-foreground truncate">{book.author}</p>
                     </td>
                     <td className="hidden md:table-cell px-4 py-3 text-sm text-muted-foreground max-w-[110px] truncate">{book.genre}</td>
-                    <td className="hidden xl:table-cell px-4 py-3 text-sm text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{book.turnover.toFixed(1)}/yr</td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{book.lastLoan}</td>
                     <td className="px-4 py-3">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold"
-                        style={{ backgroundColor: withAlpha(AMBER, 0.08), color: AMBER }}>
-                        {monthsSince(book.lastLoan)}개월 경과
-                      </span>
+                      <IdleScoreBar book={book} />
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button onClick={() => setChecklistTarget(book)}
@@ -97,7 +90,7 @@ export function WearQueuePage({
                   </tr>
                 ))}
                 {queueBooks.length === 0 && (
-                  <tr><td colSpan={6} className="py-16 text-center text-sm text-muted-foreground">
+                  <tr><td colSpan={4} className="py-16 text-center text-sm text-muted-foreground">
                     <CalendarClock className="w-5 h-5 mx-auto mb-2 opacity-40" />
                     현재 점검이 필요한 도서가 없습니다. 모든 대상 도서의 점검 리스트가 등록되었습니다.
                   </td></tr>
@@ -106,7 +99,6 @@ export function WearQueuePage({
             </table>
           </div>
           <div className="px-4 py-3 border-t border-border bg-muted/20">
-            {/* 버그 수정: "유휴화 점수 70점 이상"이라는 문구가 실제 필터 기준(6개월 경과)과 달랐음 */}
             <span className="text-sm text-muted-foreground">{queueBooks.length}건 · 최근 대출일로부터 6개월 이상 경과한 도서입니다</span>
           </div>
         </Card>

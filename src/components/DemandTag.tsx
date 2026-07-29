@@ -1,7 +1,7 @@
 // 수요 등급 태그 컴포넌트
 import type { DemandLevel } from "../types";
 
-// 개선: 컴포넌트 렌더될 때마다 객체를 새로 만들지 않도록 모듈 스코프로 이동
+// 컴포넌트 렌더될 때마다 객체를 새로 만들지 않도록 모듈 스코프로 이동
 const DEMAND_STYLE_MAP: Record<DemandLevel, string> = {
   "높음": "bg-red-100 text-red-700 border-red-200",
   "보통": "bg-amber-100 text-amber-700 border-amber-200",

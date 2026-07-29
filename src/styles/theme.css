@@ -46,7 +46,7 @@
   --sidebar-primary-foreground: #16232E;
   --sidebar-accent: #1F3140;
   --sidebar-accent-foreground: #EDE7D8;
-  --sidebar-border: rgba(255,255,255,0.08);
+  --sidebar-border: rgba(255, 255, 255, 0.08);
   --sidebar-ring: #B8863B;
 }
 
@@ -67,7 +67,7 @@
   --accent-foreground: #E8C77A;
   --destructive: #D95C5C;
   --destructive-foreground: #14181B;
-  --border: rgba(255,255,255,0.08);
+  --border: rgba(255, 255, 255, 0.08);
   --input: #1F2528;
   --input-background: #1F2528;
   --switch-background: #33393D;
@@ -87,7 +87,7 @@
   --sidebar-primary-foreground: #0D1114;
   --sidebar-accent: #1A2226;
   --sidebar-accent-foreground: #EDE9DD;
-  --sidebar-border: rgba(255,255,255,0.05);
+  --sidebar-border: rgba(255, 255, 255, 0.05);
   --sidebar-ring: #D9A94A;
 }
 
@@ -139,32 +139,101 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans);
   }
-  html { font-size: var(--font-size); }
+
+  html {
+    font-size: var(--font-size);
+  }
 
   /* Section titles read like library card-catalog labels */
-  h1 { font-family: var(--font-serif); font-size: 1.3rem;  font-weight: 600; line-height: 1.4; letter-spacing: -0.01em; }
-  h2 { font-family: var(--font-serif); font-size: 1.1rem;  font-weight: 600; line-height: 1.4; letter-spacing: -0.01em; }
-  h3 { font-family: var(--font-serif); font-size: 0.95rem; font-weight: 600; line-height: 1.4; }
-  h4 { font-size: 0.8rem;  font-weight: 500; line-height: 1.5; }
-  label  { font-size: 0.8rem; font-weight: 500; }
-  button { font-size: 0.8rem; font-weight: 500; }
-  input, select { font-size: 0.8rem; font-weight: 400; }
+  h1 {
+    font-family: var(--font-serif);
+    font-size: 1.3rem;
+    font-weight: 600;
+    line-height: 1.4;
+    letter-spacing: -0.01em;
+  }
+
+  h2 {
+    font-family: var(--font-serif);
+    font-size: 1.1rem;
+    font-weight: 600;
+    line-height: 1.4;
+    letter-spacing: -0.01em;
+  }
+
+  h3 {
+    font-family: var(--font-serif);
+    font-size: 0.95rem;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+
+  h4 {
+    font-size: 0.8rem;
+    font-weight: 500;
+    line-height: 1.5;
+  }
+
+  label {
+    font-size: 0.8rem;
+    font-weight: 500;
+  }
+
+  button {
+    font-size: 0.8rem;
+    font-weight: 500;
+  }
+
+  input,
+  select {
+    font-size: 0.8rem;
+    font-weight: 400;
+  }
 
   /* Numeric / data cells default to mono for scanability, matching call-number style figures */
-  .font-mono, [data-numeric="true"] { font-family: var(--font-mono); }
+  .font-mono,
+  [data-numeric="true"] {
+    font-family: var(--font-mono);
+  }
 
   /* 전역 여백 방어 — 브라우저 기본 마진/스크롤바로 인한 우측 여백 현상 방지 */
-  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow-x: hidden; }
-  #root { width: 100%; height: 100%; }
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow-x: hidden;
+  }
 
-  ::-webkit-scrollbar { width: 4px; height: 4px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 2px; }
-  * { scrollbar-width: thin; scrollbar-color: #D1D5DB transparent; }
+  #root {
+    width: 100%;
+    height: 100%;
+  }
+
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #D1D5DB;
+    border-radius: 2px;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #D1D5DB transparent;
+  }
 
   /* ── 커스텀 range 슬라이더: 트랙 자체를 감춰서 별도로 그린 색상 트랙 위에 thumb만 올림 ── */
   input[type="range"].themed-range {
@@ -173,27 +242,36 @@
     background: transparent;
     cursor: pointer;
   }
+
   input[type="range"].themed-range::-webkit-slider-runnable-track {
     background: transparent;
     height: 100%;
   }
+
   input[type="range"].themed-range::-webkit-slider-thumb {
     -webkit-appearance: none;
-    width: 14px; height: 14px;
+    width: 14px;
+    height: 14px;
     margin-top: -6px;
     border-radius: 9999px;
     background: var(--card);
     border: 2px solid currentColor;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
     cursor: pointer;
   }
-  input[type="range"].themed-range::-moz-range-track { background: transparent; height: 100%; }
+
+  input[type="range"].themed-range::-moz-range-track {
+    background: transparent;
+    height: 100%;
+  }
+
   input[type="range"].themed-range::-moz-range-thumb {
-    width: 14px; height: 14px;
+    width: 14px;
+    height: 14px;
     border-radius: 9999px;
     background: var(--card);
     border: 2px solid currentColor;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
     cursor: pointer;
   }
 }

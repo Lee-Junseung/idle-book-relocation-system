@@ -8,11 +8,11 @@ export function ScoreDots({ score }: { score: number }) {
   const color = getDotColor(filled);
   return (
     <div className="flex items-center gap-0.5">
-      {[1,2,3,4,5].map((i) => (
+      {[1, 2, 3, 4, 5].map((i) => (
         <span key={i} className="w-2 h-2 rounded-full border flex-shrink-0 transition-colors"
           style={{
             backgroundColor: i <= filled ? color : "transparent",
-            borderColor:      i <= filled ? color : "#D1D5DB",
+            borderColor: i <= filled ? color : "#D1D5DB",
           }} />
       ))}
     </div>

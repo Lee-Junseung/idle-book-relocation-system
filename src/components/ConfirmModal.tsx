@@ -11,7 +11,6 @@ export function ConfirmModal({ config, onClose }: { config: ModalConfig; onClose
   const dmg = bi ? { label: getDotLabel(bi.damage), color: getDotColor(bi.damage) } : null;
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // 버그 수정: ModalConfig.icon("danger"/"warning")이 타입에는 있었지만 실제로 안 쓰이고 있었음
   const HeaderIcon = config.icon === "warning" ? AlertTriangle : ShieldAlert;
 
   // Esc 키로 닫기 + 모달 진입 시 포커스 이동 (접근성 보완)
@@ -59,7 +58,7 @@ export function ConfirmModal({ config, onClose }: { config: ModalConfig; onClose
               {config.summaryItems.map((s) => (
                 <div key={s.label} className="rounded-md border border-border bg-muted/20 px-3 py-2.5 flex flex-col gap-0.5">
                   <p className="text-[10px] text-muted-foreground">{s.label}</p>
-                  <p className="text-sm font-bold leading-tight" style={{ color: s.color, fontFamily:"'JetBrains Mono', monospace" }}>{s.value}</p>
+                  <p className="text-sm font-bold leading-tight" style={{ color: s.color, fontFamily: "'JetBrains Mono', monospace" }}>{s.value}</p>
                   {s.sub && <p className="text-[10px] text-muted-foreground">{s.sub}</p>}
                 </div>
               ))}
@@ -80,7 +79,7 @@ export function ConfirmModal({ config, onClose }: { config: ModalConfig; onClose
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div className="bg-card rounded border border-border px-2 py-1.5">
                     <p className="text-[10px] text-muted-foreground mb-0.5">최근 대출일</p>
-                    <p className="text-xs font-semibold text-foreground" style={{ fontFamily:"'JetBrains Mono', monospace" }}>{bi.lastLoan}</p>
+                    <p className="text-xs font-semibold text-foreground" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{bi.lastLoan}</p>
                   </div>
                   <div className="bg-card rounded border border-border px-2 py-1.5">
                     <p className="text-[10px] text-muted-foreground mb-0.5">마모 수준</p>
@@ -91,7 +90,7 @@ export function ConfirmModal({ config, onClose }: { config: ModalConfig; onClose
                   </div>
                   <div className="bg-card rounded border border-border px-2 py-1.5">
                     <p className="text-[10px] text-muted-foreground mb-0.5">연 대출률</p>
-                    <p className="text-xs font-semibold text-foreground" style={{ fontFamily:"'JetBrains Mono', monospace" }}>{bi.turnover.toFixed(1)}/yr</p>
+                    <p className="text-xs font-semibold text-foreground" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{bi.turnover.toFixed(1)}/yr</p>
                   </div>
                 </div>
               </div>

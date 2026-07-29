@@ -21,7 +21,7 @@ import {
   getLibraryNetworkDistances,
 } from "../api/dashboard";
 
-// ---- 화면에서 쓰는 로컬 도메인 타입 (기존 mock 데이터 형태 유지) ----
+// 화면에서 쓰는 로컬 도메인 타입
 interface LoanTrendPoint { month: string; collection: number; loans: number; turnover: number }
 interface DemographicPoint { age: string; count: number; pct: number }
 interface Branch {
@@ -87,19 +87,19 @@ export function OverviewPage() {
         if (cancelled) return;
 
         // 유휴화 도서
-        const pct = idleBooks.percentageChange;
+        const pct = idleBooks.data.percentageChange;
         setSnapshotStats({
           lowTurnoverBooks: {
-            value: idleBooks.currentMonthCount.toLocaleString(),
+            value: idleBooks.data.currentMonthCount.toLocaleString(),
             trend: `${pct >= 0 ? "+" : ""}${pct}%`,
           },
           // 파손 심사 대기
-          pendingWearReview: { value: damagePending.count.toLocaleString() },
+          pendingWearReview: { value: damagePending.data.currentMonthCount.toLocaleString() },
           // 이관 검토 대기
-          pendingRelocationReview: { value: transferPending.count.toLocaleString() },
+          pendingRelocationReview: { value: transferPending.data.count.toLocaleString() },
         });
 
-        // 월별 대출 추이 + 소장 도서 수(최신월 기준)
+        // 월별 대출 추이 + 소장 도서 수 (최신월 기준)
         const trend: LoanTrendPoint[] = monthlyLoans.data.map((d) => {
           const [, m] = d.date.split("-");
           return {
@@ -173,25 +173,25 @@ export function OverviewPage() {
   }, [loading]);
 
   if (loading) {
-    return <div className="p-6 text-sm text-muted-foreground">데이터를 불러오는 중입니다...</div>;
+    return <div className="p-4 sm:p-6 text-sm text-muted-foreground">데이터를 불러오는 중입니다...</div>;
   }
 
   if (error) {
-    return <div className="p-6 text-sm text-red-500">{error}</div>;
+    return <div className="p-4 sm:p-6 text-sm text-red-500">{error}</div>;
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-4 sm:gap-5">
 
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-4 py-3 rounded-md border"
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 px-3.5 sm:px-4 py-3 rounded-md border"
         style={{ backgroundColor: withAlpha(NAV, 0.03), borderColor: withAlpha(NAV, 0.19) }}>
         <div className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0" style={{ backgroundColor: NAV }}>
           <Pin className="w-4 h-4 text-white" />
         </div>
-        <div>
+        <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-semibold text-foreground">북수원도서관</span>
-            <span className="text-xs text-muted-foreground">경기도 수원시 장안구 정조로 944</span>
+            <span className="text-xs text-muted-foreground break-words">경기도 수원시 장안구 정조로 944</span>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
             수원시 공공도서관 네트워크 연결 · 이관 알고리즘 기준점
@@ -199,7 +199,7 @@ export function OverviewPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
         <MetricCard
           label="소장 도서 수" value={hubCollection.toLocaleString()} sub="총 소장 권수"
           trend={`${hubBooksDelta >= 0 ? "+" : ""}${hubBooksDelta.toLocaleString()}권`}
@@ -215,7 +215,7 @@ export function OverviewPage() {
           color={BLUE} icon={ArrowLeftRight} />
       </div>
 
-      <Card className="p-4 flex flex-col">
+      <Card className="p-3.5 sm:p-4 flex flex-col">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-3">
           <div>
             <h3 className="text-foreground">북수원도서관 월별 대출 현황</h3>
@@ -223,34 +223,36 @@ export function OverviewPage() {
               소장 도서 수 · 대출 건수 · 평균 회전율
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-3 text-[11px] flex-shrink-0">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] flex-shrink-0">
             {[
               { label: "소장 도서 수", c: withAlpha(NAV, 0.38) },
               { label: "대출 건수", c: BLUE },
               { label: "평균 회전율", c: RED },
             ].map(l => (
-              <span key={l.label} className="flex items-center gap-1 text-muted-foreground">
+              <span key={l.label} className="flex items-center gap-1 text-muted-foreground whitespace-nowrap">
                 <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: l.c }} />
                 {l.label}
               </span>
             ))}
           </div>
         </div>
-        <div className="h-64 sm:h-72" ref={chartWrapRef}>
+        <div className="h-56 sm:h-64 md:h-72" ref={chartWrapRef}>
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={loanTrendData}
-              margin={{ top: 8, right: 8, bottom: 4, left: -8 }}>
+              margin={{ top: 8, right: chartWidth < 480 ? 0 : 8, bottom: 4, left: chartWidth < 480 ? -16 : -8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
               <XAxis dataKey="month"
                 interval={chartWidth < 480 ? 1 : 0}
                 tick={{ fontSize: 10, fill: "#9CA3AF", fontFamily: "'JetBrains Mono', monospace" }}
                 axisLine={false} tickLine={false} />
               <YAxis yAxisId="collection" axisLine={false} tickLine={false}
+                width={chartWidth < 480 ? 34 : 40}
                 domain={["dataMin - 2000", "dataMax + 2000"]}
                 tick={{ fontSize: 10, fill: "#9CA3AF", fontFamily: "'JetBrains Mono', monospace" }}
                 tickFormatter={v => v >= 1000 ? (v / 1000).toFixed(0) + "k" : String(v)} />
               <YAxis yAxisId="loans" orientation="right" axisLine={false} tickLine={false}
+                width={chartWidth < 480 ? 34 : 40}
                 tick={{ fontSize: 10, fill: "#9CA3AF", fontFamily: "'JetBrains Mono', monospace" }}
                 tickFormatter={v => v >= 1000 ? (v / 1000).toFixed(0) + "k" : String(v)} />
               <YAxis yAxisId="turnover" hide domain={[0, "dataMax + 0.03"]} />
@@ -259,7 +261,7 @@ export function OverviewPage() {
                   if (!active || !payload?.length) return null;
                   const row = loanTrendData.find(d => d.month === label);
                   return (
-                    <div className="bg-card border border-border rounded shadow-lg px-3 py-2.5 text-xs min-w-[190px]">
+                    <div className="bg-card border border-border rounded shadow-lg px-3 py-2.5 text-xs w-[170px] sm:min-w-[190px] sm:w-auto">
                       <p className="font-semibold text-foreground mb-2 pb-1.5 border-b border-border">{label}</p>
                       {[
                         { label: "소장 도서 수", value: row ? row.collection.toLocaleString() + "권" : "", color: NAV },
@@ -281,7 +283,7 @@ export function OverviewPage() {
                 }}
               />
               <Bar yAxisId="collection" dataKey="collection" name="소장 도서 수"
-                fill={NAV} fillOpacity={0.16} radius={[2, 2, 0, 0]} barSize={20} />
+                fill={NAV} fillOpacity={0.16} radius={[2, 2, 0, 0]} barSize={chartWidth < 480 ? 14 : 20} />
               <Line yAxisId="loans" type="monotone" dataKey="loans" name="대출 건수"
                 stroke={BLUE} strokeWidth={2}
                 dot={{ r: 3, fill: BLUE, strokeWidth: 1.5, stroke: "#fff" }}
@@ -297,7 +299,7 @@ export function OverviewPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div ref={demoCardRef} className="h-full">
-          <Card className="p-4 flex flex-col h-full">
+          <Card className="p-3.5 sm:p-4 flex flex-col h-full">
             <h3 className="text-foreground mb-1">지역 연령대 분포</h3>
             <p className="text-xs text-muted-foreground mb-3">장안구 거주자 기준</p>
             <ResponsiveContainer width="100%" height={180}>
@@ -320,18 +322,18 @@ export function OverviewPage() {
             </ResponsiveContainer>
             <div className="flex flex-col gap-1 mt-auto">
               {demographicsData.map((d, i) => (
-                <div key={d.age} className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
-                    <span className="text-[11px] text-muted-foreground">{d.age}</span>
+                <div key={d.age} className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                    <span className="text-[11px] text-muted-foreground truncate">{d.age}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-14 h-1 bg-muted rounded-full overflow-hidden">
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="w-10 sm:w-14 h-1 bg-muted rounded-full overflow-hidden">
                       <div className="h-full rounded-full" style={{ width: `${d.pct}%`, backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
                     </div>
                     <span className="text-[11px] font-medium text-foreground w-8 text-right"
                       style={{ fontFamily: "'JetBrains Mono', monospace" }}>{d.pct}%</span>
-                    {demoCardWidth >= 260 && (
+                    {demoCardWidth >= 300 && (
                       <span className="text-[10px] text-muted-foreground text-right w-16 flex-shrink-0"
                         style={{ fontFamily: "'JetBrains Mono', monospace" }}>
                         ({d.count.toLocaleString()}명)
@@ -347,12 +349,12 @@ export function OverviewPage() {
           </Card>
         </div>
 
-        <Card className="p-4 flex flex-col h-full">
+        <Card className="p-3.5 sm:p-4 flex flex-col h-full">
           <h3 className="text-foreground mb-1">수원시 도서관 네트워크</h3>
           <p className="text-xs text-muted-foreground mb-3">이관 알고리즘 기준 분관 현황 (북수원도서관 기준)</p>
           <div className="flex flex-col gap-1.5">
             {branches.map((b) => (
-              <div key={b.id} className="flex items-center gap-2.5 px-2.5 py-2 rounded border border-border">
+              <div key={b.id} className="flex items-center gap-2 sm:gap-2.5 px-2.5 py-2 rounded border border-border">
                 <div className="w-7 h-7 rounded flex items-center justify-center flex-shrink-0"
                   style={{ backgroundColor: withAlpha(b.hub ? NAV : BROWN, 0.08) }}>
                   {b.hub
@@ -366,7 +368,7 @@ export function OverviewPage() {
                       <span className="text-[9px] font-bold px-1 py-0.5 rounded text-white flex-shrink-0" style={{ backgroundColor: NAV }}>HUB</span>
                     )}
                   </div>
-                  <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                  <span className="text-[10px] text-muted-foreground block truncate" title={b.district}>
                     {b.district}
                   </span>
                 </div>

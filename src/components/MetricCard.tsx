@@ -28,7 +28,7 @@ export function MetricCard({ label, value, sub, trend, color, icon: Icon, highli
           <Icon className="w-3.5 h-3.5" style={{ color }} />
         </div>
       </div>
-      <div className="text-[1.55rem] font-semibold text-foreground leading-none" style={{ fontFamily:"'JetBrains Mono', monospace" }}>
+      <div className="text-[1.55rem] font-semibold text-foreground leading-none" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
         {value}
       </div>
       <div className="flex items-center gap-1.5 text-xs">

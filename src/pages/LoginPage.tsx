@@ -1,25 +1,50 @@
-// 사서 로그인/회원가입/아이디·비밀번호 찾기를 처리하는 로그인 화면 (공공기관 사이트 스타일: 중앙 단일 박스, 라벨형 입력)
+// 사서 로그인/회원가입을 처리하는 로그인 화면
 import { useState, useEffect, type FormEvent, type ReactNode } from "react";
 import {
-  BookOpen, User as UserIcon, Lock, Mail, Hash, Eye, EyeOff,
-  AlertCircle, CheckCircle2, X, KeyRound, Search, ArrowRight,
+  BookOpen, User as UserIcon, Lock, Mail, Hash, Tag, Eye, EyeOff,
+  AlertCircle, CheckCircle2, X, ArrowRight, Loader2, LibraryBig,
   type LucideIcon,
 } from "lucide-react";
 import { withAlpha } from "../components";
 import { NAV, GREEN, RED } from "../constants/colors";
-import { login, registerUser, findUserId, resetPassword } from "../data/auth";
-import { Session, User } from "../types";
+import { loginApi, registerApi } from "../api/auth";
+import { ApiError } from "../api/client";
+import { Session } from "../types";
 
 const MONO = "'JetBrains Mono', monospace";
 const SERIF = "var(--font-serif)";
 const REMEMBER_ID_KEY = "lib_remember_id";
 
-/* ------------------------------------------------------------------ */
-/*  Page                                                               */
-/* ------------------------------------------------------------------ */
+const BRASS = "#C9A66B";
+
+const CALL_NUMBERS = [
+  "북수원도서관",
+  "슬기샘어린이도서관",
+  "일월도서관",
+  "대추골도서관",
+  "화서다산도서관",
+  "선경도서관",
+  "중앙도서관",
+  "호매실도서관",
+  "서수원도서관",
+  "광교홍재도서관",
+  "영통도서관"
+];
+
+const PROCESS_STEPS = [
+  { n: "01", text: "유휴 도서 파손 점검" },
+  { n: "02", text: "이관 · 보관 · 폐기 결정" },
+  { n: "03", text: "이관 도서 우선순위 배정" },
+];
+
 export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) {
   const [signupOpen, setSignupOpen] = useState(false);
-  const [findOpen, setFindOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const t = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(t);
+  }, []);
 
   const [loginId, setLoginId] = useState(() => {
     try { return localStorage.getItem(REMEMBER_ID_KEY) ?? ""; } catch { return ""; }
@@ -30,51 +55,165 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
   const [loginPw, setLoginPw] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [loginError, setLoginError] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
   const [notice, setNotice] = useState("");
 
-  function handleLogin(e: FormEvent) {
+  async function handleLogin(e: FormEvent) {
     e.preventDefault();
     setLoginError("");
     if (!loginId.trim() || !loginPw) {
       setLoginError("아이디와 비밀번호를 입력해 주세요.");
       return;
     }
-    const result = login(loginId.trim(), loginPw);
-    if (!result.ok) {
-      setLoginError(result.message);
-      return;
-    }
+
+    setLoginLoading(true);
     try {
-      if (rememberId) localStorage.setItem(REMEMBER_ID_KEY, loginId.trim());
-      else localStorage.removeItem(REMEMBER_ID_KEY);
-    } catch { /* 저장 공간 접근 불가 시 조용히 무시 (기능 자체는 비필수) */ }
-    onLogin(result.session);
+      const res = await loginApi({ id: loginId.trim(), password: loginPw });
+
+      try {
+        if (rememberId) localStorage.setItem(REMEMBER_ID_KEY, loginId.trim());
+        else localStorage.removeItem(REMEMBER_ID_KEY);
+      } catch { /* 저장 공간 접근 불가 시 조용히 무시 (기능 자체는 비필수) */ }
+
+      const session: Session = {
+        name: res.name,
+        email: res.email,
+      };
+      onLogin(session);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setLoginError(err.message);
+      } else {
+        setLoginError("로그인 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+      }
+    } finally {
+      setLoginLoading(false);
+    }
   }
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-4 bg-muted/30">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen w-full flex bg-background">
+      <style>{`
+        @keyframes catalog-marquee {
+          from { transform: translateX(0); }
+          to { transform: translateX(-50%); }
+        }
+      `}</style>
 
-        {/* 기관 식별 영역 */}
-        <div className="flex flex-col items-center text-center mb-6">
-          <div className="w-11 h-11 rounded-sm flex items-center justify-center mb-3" style={{ backgroundColor: NAV }}>
-            <BookOpen className="w-5 h-5 text-white" />
+      <div
+        className="hidden lg:flex lg:w-[45%] xl:w-[40%] relative flex-col justify-between overflow-hidden px-12 py-14"
+        style={{ backgroundColor: NAV }}
+      >
+        <svg className="absolute inset-0 w-full h-full opacity-[0.5] pointer-events-none mix-blend-overlay" aria-hidden="true">
+          <filter id="loginGrain">
+            <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch" />
+            <feColorMatrix type="saturate" values="0" />
+          </filter>
+          <rect width="100%" height="100%" filter="url(#loginGrain)" />
+        </svg>
+
+        <div
+          className="absolute -top-28 -left-24 w-[440px] h-[440px] rounded-full blur-[100px] opacity-[0.28] pointer-events-none"
+          style={{ background: `radial-gradient(circle, ${BRASS} 0%, transparent 70%)` }}
+        />
+        <div
+          className="absolute -bottom-32 -right-16 w-[360px] h-[360px] rounded-full blur-[110px] opacity-[0.16] pointer-events-none"
+          style={{ background: `radial-gradient(circle, #ffffff 0%, transparent 70%)` }}
+        />
+
+        <div className="relative z-10 flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-sm flex items-center justify-center bg-white/10 backdrop-blur-sm border border-white/15">
+            <LibraryBig className="w-4.5 h-4.5 text-white" />
           </div>
-          <h1 className="text-foreground" style={{ fontFamily: SERIF, fontSize: "21px", fontWeight: 700 }}>
-            도서 관리 시스템
-          </h1>
-          <p className="text-muted-foreground mt-1" style={{ fontSize: "12.5px" }}>
-            수원시 공공도서관 통합관리 시스템 · 사서 전용
-          </p>
+          <span className="text-white/90 text-sm font-semibold tracking-wide">도서 관리 시스템</span>
         </div>
 
-        {/* 로그인 박스 */}
-        <div className="bg-card border border-border rounded-sm shadow-sm overflow-hidden">
-          <div className="h-[3px] w-full" style={{ backgroundColor: NAV }} />
+        <div className="relative z-10">
+          <h2
+            className="text-white leading-[1.35] mb-4"
+            style={{ fontFamily: SERIF, fontSize: "30px", fontWeight: 700, letterSpacing: "-0.01em" }}
+          >
+            장서 스마트 순환 시스템<br />YooHoo 유휴
+          </h2>
+          <p className="text-white/60 text-sm leading-relaxed max-w-[320px] mb-8">
+            YooHoo는 소장 자료의 상태, 이동, 보존 결정을 사서가 직접 추적할 수 있도록 설계되었습니다.
+          </p>
 
-          <form onSubmit={handleLogin} className="px-6 py-7 sm:px-8 flex flex-col gap-4">
+          <div className="flex flex-col mb-7">
+            {PROCESS_STEPS.map((step, i) => (
+              <div key={step.n} className="relative flex gap-3 pb-5 last:pb-0">
+                {i < PROCESS_STEPS.length - 1 && (
+                  <span className="absolute left-3 top-6 bottom-0 w-px" style={{ backgroundColor: "rgba(255,255,255,0.14)" }} />
+                )}
+                <span
+                  className="relative z-10 flex-shrink-0 w-6 h-6 rounded-full border flex items-center justify-center"
+                  style={{
+                    borderColor: withAlpha(BRASS, 0.5),
+                    backgroundColor: NAV,
+                    color: BRASS,
+                    fontFamily: MONO,
+                    fontSize: "10px",
+                  }}
+                >
+                  {step.n}
+                </span>
+                <span className="text-white/80 text-sm pt-0.5 leading-snug">{step.text}</span>
+              </div>
+            ))}
+          </div>
+
+          <div
+            className="relative overflow-hidden h-5"
+            style={{ maskImage: "linear-gradient(90deg, transparent, black 12%, black 88%, transparent)" }}
+          >
+            <div
+              className="flex gap-5 whitespace-nowrap absolute motion-safe:animate-[catalog-marquee_26s_linear_infinite]"
+              style={{ fontFamily: MONO, fontSize: "10.5px", color: "rgba(255,255,255,0.32)" }}
+            >
+              {[...CALL_NUMBERS, ...CALL_NUMBERS].map((c, i) => (
+                <span key={i}>{c}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="relative z-10 flex items-center justify-between text-white/40" style={{ fontFamily: MONO, fontSize: "11px" }}>
+          <span>SUWON PUBLIC LIBRARY</span>
+          <span>© 2026</span>
+        </div>
+      </div>
+
+      <div className="flex-1 flex items-center justify-center px-4 py-10 sm:px-8">
+        <div
+          className="w-full max-w-[380px] motion-safe:transition-all motion-safe:duration-500 motion-safe:ease-out"
+          style={{
+            opacity: mounted ? 1 : 0,
+            transform: mounted ? "translateY(0px)" : "translateY(10px)",
+          }}
+        >
+          {/* 모바일 전용 헤더 (좌측 패널 대체) */}
+          <div className="flex lg:hidden flex-col items-center text-center mb-8">
+            <div className="w-11 h-11 rounded-sm flex items-center justify-center mb-3" style={{ backgroundColor: NAV }}>
+              <BookOpen className="w-5 h-5 text-white" />
+            </div>
+            <h1 className="text-foreground" style={{ fontFamily: SERIF, fontSize: "20px", fontWeight: 700 }}>
+              도서 관리 시스템
+            </h1>
+            <p className="text-muted-foreground mt-1" style={{ fontSize: "12.5px" }}>
+              수원시 공공도서관 통합관리 시스템 · 사서 전용
+            </p>
+          </div>
+
+          <div className="hidden lg:block mb-9">
+            <h1 className="text-foreground" style={{ fontFamily: SERIF, fontSize: "26px", fontWeight: 700, letterSpacing: "-0.01em" }}>
+              다시 오셨네요
+            </h1>
+            <p className="text-muted-foreground mt-1.5 text-sm">사서 계정으로 로그인해 업무를 이어가세요.</p>
+          </div>
+
+          <form onSubmit={handleLogin} className="flex flex-col gap-4">
             {notice && (
-              <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-sm text-sm font-medium" style={{ backgroundColor: withAlpha(GREEN, 0.08), color: GREEN }}>
+              <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-md text-sm font-medium" style={{ backgroundColor: withAlpha(GREEN, 0.08), color: GREEN }}>
                 <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> {notice}
               </div>
             )}
@@ -89,52 +228,51 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
               onChange={setLoginPw}
               autoComplete="current-password"
               trailing={
-                <button type="button" onClick={() => setShowPw((s) => !s)} className="flex-shrink-0 text-muted-foreground" aria-label={showPw ? "비밀번호 숨기기" : "비밀번호 표시"}>
+                <button type="button" onClick={() => setShowPw((s) => !s)} className="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors" aria-label={showPw ? "비밀번호 숨기기" : "비밀번호 표시"}>
                   {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               }
             />
 
-            <label className="flex items-center gap-2 -mt-1 select-none cursor-pointer">
-              <input type="checkbox" checked={rememberId} onChange={(e) => setRememberId(e.target.checked)}
-                className="w-3.5 h-3.5 rounded-sm accent-primary" />
-              <span className="text-sm text-muted-foreground">아이디 저장</span>
-            </label>
+            <div className="flex items-center justify-between -mt-1">
+              <label className="flex items-center gap-2 select-none cursor-pointer">
+                <input type="checkbox" checked={rememberId} onChange={(e) => setRememberId(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded-sm accent-primary" />
+                <span className="text-sm text-muted-foreground">아이디 저장</span>
+              </label>
+              <span className="text-sm text-muted-foreground">아이디 · 비밀번호 찾기</span>
+            </div>
 
-            {loginError && (
-              <div className="flex items-center gap-2 text-sm font-medium" style={{ color: RED }}>
-                <AlertCircle className="w-4 h-4 flex-shrink-0" /> {loginError}
-              </div>
-            )}
+            {/* 에러 영역: 항상 렌더링되어 있어 메시지 유무와 상관없이 높이가 고정됨 */}
+            <div className="min-h-[16px] flex items-center">
+              {loginError && (
+                <div className="flex items-center gap-2 text-sm font-medium" style={{ color: RED }}>
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" /> {loginError}
+                </div>
+              )}
+            </div>
 
             <button
               type="submit"
-              className="mt-1 py-3 rounded-sm text-sm font-semibold flex items-center justify-center gap-2 text-white transition-opacity hover:opacity-90"
+              disabled={loginLoading}
+              className="mt-1 py-3 rounded-md text-sm font-semibold flex items-center justify-center gap-2 text-white transition-all hover:opacity-90 hover:-translate-y-[1px] active:translate-y-0 disabled:opacity-60 disabled:translate-y-0"
               style={{ backgroundColor: NAV }}
             >
-              로그인 <ArrowRight className="w-4 h-4" />
+              {loginLoading ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> 로그인 중...</>
+              ) : (
+                <>로그인 <ArrowRight className="w-4 h-4" /></>
+              )}
             </button>
 
-            <div className="flex items-center justify-center gap-3 mt-1">
-              <button type="button" onClick={() => setSignupOpen(true)} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                회원가입
-              </button>
-              <span className="w-px h-3.5 bg-border" />
-              <button type="button" onClick={() => setFindOpen(true)} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                아이디 · 비밀번호 찾기
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setSignupOpen(true)}
+              className="py-3 rounded-md text-sm font-semibold border border-border text-foreground hover:bg-muted transition-colors"
+            >
+              사서 계정 만들기
+            </button>
           </form>
-        </div>
-
-        {/* 하단 안내 영역 */}
-        <div className="flex flex-col items-center gap-1.5 mt-5">
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-            <span>이용약관</span>
-            <span className="w-px h-2.5 bg-border" />
-            <span>개인정보처리방침</span>
-          </div>
-          <p className="text-[11px] text-muted-foreground" style={{ fontFamily: MONO }}>© 2026 수원시 공공도서관 관리 시스템</p>
         </div>
       </div>
 
@@ -148,14 +286,10 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
           }}
         />
       )}
-      {findOpen && <FindAccountModal onClose={() => setFindOpen(false)} />}
     </div>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Modal shell                                                       */
-/* ------------------------------------------------------------------ */
 function ModalShell({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -165,17 +299,17 @@ function ModalShell({ title, onClose, children }: { title: string; onClose: () =
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/40 motion-safe:animate-[fadeIn_0.15s_ease-out]" onClick={onClose} />
       <div role="dialog" aria-modal="true" aria-labelledby="login-modal-title"
-        className="relative rounded-sm w-full max-w-sm overflow-hidden bg-card border border-border shadow-lg">
-        <div className="h-[3px] w-full" style={{ backgroundColor: NAV }} />
-        <div className="px-6 py-4 flex items-center justify-between border-b border-border">
+        className="relative rounded-lg w-full max-w-xl overflow-hidden bg-card border border-border shadow-xl max-h-[88vh] flex flex-col">
+        <div className="h-[3px] w-full flex-shrink-0" style={{ backgroundColor: NAV }} />
+        <div className="px-6 py-3.5 flex items-center justify-between border-b border-border flex-shrink-0">
           <h3 id="login-modal-title" className="text-foreground" style={{ fontFamily: SERIF, fontSize: "16px", fontWeight: 700 }}>{title}</h3>
           <button onClick={onClose} aria-label="닫기" className="p-1.5 rounded-sm hover:bg-muted transition-colors text-muted-foreground">
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="p-6">{children}</div>
+        <div className="px-6 py-5 overflow-y-auto">{children}</div>
       </div>
     </div>
   );
@@ -186,151 +320,126 @@ function SignupModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
   const [suPw, setSuPw] = useState("");
   const [suPw2, setSuPw2] = useState("");
   const [suName, setSuName] = useState("");
+  const [suNickname, setSuNickname] = useState("");
   const [suEmail, setSuEmail] = useState("");
   const [suLibId, setSuLibId] = useState("");
-  const [suError, setSuError] = useState("");
+  const [suErrors, setSuErrors] = useState<Record<string, string>>({});
+  const [suLoading, setSuLoading] = useState(false);
 
-  function handleSignup(e: FormEvent) {
+  function validateSignup(): Record<string, string> {
+    const errors: Record<string, string> = {};
+
+    if (!suName.trim()) errors.name = "이름은 필수 입력 값입니다.";
+    else if (suName.trim().length < 2 || suName.trim().length > 30) errors.name = "이름은 2자에서 30자까지 입력해주세요.";
+
+    if (!suNickname.trim()) errors.nickname = "닉네임은 필수 입력 값입니다.";
+
+    if (!suId.trim()) errors.id = "아이디는 필수 입력 값입니다.";
+    else if (suId.trim().length < 4 || suId.trim().length > 20) errors.id = "아이디는 4자에서 20자까지 입력해주세요.";
+
+    if (!suLibId.trim()) errors.libId = "사서 번호는 필수 입력 값입니다.";
+
+    if (!suPw) errors.pw = "비밀번호는 필수 입력 값입니다.";
+    else if (suPw.length < 8 || suPw.length > 20) errors.pw = "비밀번호는 8자에서 20자까지 입력해주세요.";
+
+    if (!suPw2) errors.pw2 = "비밀번호 확인을 입력해 주세요.";
+    else if (suPw !== suPw2) errors.pw2 = "비밀번호가 일치하지 않습니다.";
+
+    if (!suEmail.trim()) errors.email = "이메일은 필수 입력 값입니다.";
+    else if (!/^\S+@\S+\.\S+$/.test(suEmail.trim())) errors.email = "유효한 이메일 형식이 아닙니다.";
+
+    return errors;
+  }
+
+  // 백엔드 message에 필드 관련 키워드가 있으면 해당 필드 아래로, 없으면 general로 표시
+  function mapServerError(message: string): Record<string, string> {
+    if (message.includes("아이디")) return { id: message };
+    if (message.includes("이메일")) return { email: message };
+    if (message.includes("비밀번호")) return { pw: message };
+    if (message.includes("사서")) return { libId: message };
+    if (message.includes("이름")) return { name: message };
+    if (message.includes("닉네임")) return { nickname: message };
+    return { general: message };
+  }
+
+  async function handleSignup(e: FormEvent) {
     e.preventDefault();
-    setSuError("");
-    if (!suId.trim() || !suPw || !suPw2 || !suName.trim() || !suEmail.trim() || !suLibId.trim()) {
-      setSuError("이름, 이메일, 사서번호를 포함한 모든 항목은 필수입니다."); return;
-    }
-    if (suPw !== suPw2) { setSuError("비밀번호가 일치하지 않습니다."); return; }
-    if (suPw.length < 4) { setSuError("비밀번호는 4자 이상이어야 합니다."); return; }
-    if (!/^\S+@\S+\.\S+$/.test(suEmail.trim())) { setSuError("이메일 형식이 올바르지 않습니다."); return; }
 
-    const newUser: User = {
-      id: suId.trim(), password: suPw, name: suName.trim(),
-      email: suEmail.trim(), librarianId: suLibId.trim(),
-    };
-    const result = registerUser(newUser);
-    if (!result.ok) { setSuError(result.message); return; }
-    onSuccess(newUser.id);
+    const errors = validateSignup();
+    if (Object.keys(errors).length > 0) {
+      setSuErrors(errors);
+      return;
+    }
+    setSuErrors({});
+
+    setSuLoading(true);
+    try {
+      await registerApi({
+        id: suId.trim(),
+        password: suPw,
+        name: suName.trim(),
+        nickname: suNickname.trim(),
+        email: suEmail.trim(),
+        librarianCode: suLibId.trim(),
+      });
+      onSuccess(suId.trim());
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setSuErrors(mapServerError(err.message));
+      } else {
+        setSuErrors({ general: "회원가입 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요." });
+      }
+    } finally {
+      setSuLoading(false);
+    }
   }
 
   return (
-    <ModalShell title="회원가입" onClose={onClose}>
-      <form onSubmit={handleSignup} className="flex flex-col gap-3.5">
-        <Field icon={UserIcon} label="아이디" placeholder="아이디" value={suId} onChange={setSuId} autoComplete="username" />
-        <Field icon={Lock} label="비밀번호" placeholder="비밀번호 (4자 이상)" type="password" value={suPw} onChange={setSuPw} autoComplete="new-password" />
-        <Field icon={Lock} label="비밀번호 확인" placeholder="비밀번호 확인" type="password" value={suPw2} onChange={setSuPw2} autoComplete="new-password" />
-        <div className="h-px my-0.5 bg-border" />
-        <Field icon={UserIcon} label="이름" placeholder="이름 (필수)" value={suName} onChange={setSuName} />
-        <Field icon={Mail} label="이메일" placeholder="이메일 (필수)" type="email" value={suEmail} onChange={setSuEmail} autoComplete="email" />
-        <Field icon={Hash} label="사서번호" placeholder="사서번호 (필수)" value={suLibId} onChange={setSuLibId} />
-        {suError && (
-          <div className="flex items-center gap-2 text-sm font-medium" style={{ color: RED }}>
-            <AlertCircle className="w-4 h-4 flex-shrink-0" /> {suError}
-          </div>
-        )}
-        <button type="submit" className="mt-1 py-3 rounded-sm text-sm font-semibold text-white transition-opacity hover:opacity-90" style={{ backgroundColor: NAV }}>
-          가입하기
+    <ModalShell title="사서 계정 만들기" onClose={onClose}>
+      <form onSubmit={handleSignup} className="flex flex-col gap-2.5">
+        <div className="grid grid-cols-2 gap-3">
+          <Field icon={UserIcon} label="이름" placeholder="이름을 입력하세요" value={suName} onChange={setSuName} error={suErrors.name} reserveError compact />
+          <Field icon={Tag} label="닉네임" placeholder="닉네임을 입력하세요" value={suNickname} onChange={setSuNickname} error={suErrors.nickname} reserveError compact />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <Field icon={UserIcon} label="아이디" placeholder="아이디를 입력하세요" value={suId} onChange={setSuId} autoComplete="username" error={suErrors.id} reserveError compact />
+          <Field icon={Hash} label="사서번호" placeholder="사서번호를 입력하세요" value={suLibId} onChange={setSuLibId} error={suErrors.libId} reserveError compact />
+        </div>
+
+        <Field icon={Lock} label="비밀번호" placeholder="비밀번호를 입력하세요" type="password" value={suPw} onChange={setSuPw} autoComplete="new-password" error={suErrors.pw} reserveError />
+
+        <Field icon={Lock} label="비밀번호 확인" placeholder="비밀번호를 다시 입력하세요" type="password" value={suPw2} onChange={setSuPw2} autoComplete="new-password" error={suErrors.pw2} reserveError />
+
+        <Field icon={Mail} label="이메일" placeholder="이메일을 입력하세요" type="email" value={suEmail} onChange={setSuEmail} autoComplete="email" error={suErrors.email} reserveError />
+
+        {/* 특정 필드에 속하지 않는 서버 오류(예: 네트워크 오류) 전용 영역 */}
+        <div className="min-h-[16px] flex items-center">
+          {suErrors.general && (
+            <div className="flex items-center gap-2 text-sm font-medium" style={{ color: RED }}>
+              <AlertCircle className="w-4 h-4 flex-shrink-0" /> {suErrors.general}
+            </div>
+          )}
+        </div>
+
+        <button type="submit" disabled={suLoading} className="py-3 rounded-md text-sm font-semibold text-white transition-all hover:opacity-90 hover:-translate-y-[1px] active:translate-y-0 disabled:opacity-60 disabled:translate-y-0 flex items-center justify-center gap-2" style={{ backgroundColor: NAV }}>
+          {suLoading ? (<><Loader2 className="w-4 h-4 animate-spin" /> 가입 처리 중...</>) : "가입하기"}
         </button>
-        <p className="text-center mt-1 text-muted-foreground" style={{ fontSize: "12.5px" }}>이름 · 이메일 · 사서번호는 필수 입력 항목입니다.</p>
       </form>
     </ModalShell>
   );
 }
 
-function FindAccountModal({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<"id" | "pw">("id");
-
-  const [fName, setFName] = useState("");
-  const [fEmail, setFEmail] = useState("");
-  const [idResult, setIdResult] = useState<{ ok: true; id: string } | { ok: false; message: string } | null>(null);
-
-  const [pId, setPId] = useState("");
-  const [pName, setPName] = useState("");
-  const [pEmail, setPEmail] = useState("");
-  const [pNewPw, setPNewPw] = useState("");
-  const [pNewPw2, setPNewPw2] = useState("");
-  const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
-
-  function handleFindId(e: FormEvent) {
-    e.preventDefault();
-    if (!fName.trim() || !fEmail.trim()) { setIdResult({ ok: false, message: "이름과 이메일을 모두 입력해 주세요." }); return; }
-    setIdResult(findUserId(fName, fEmail));
-  }
-
-  function handleResetPw(e: FormEvent) {
-    e.preventDefault();
-    if (!pId.trim() || !pName.trim() || !pEmail.trim() || !pNewPw || !pNewPw2) {
-      setPwMsg({ ok: false, text: "모든 항목을 입력해 주세요." }); return;
-    }
-    if (pNewPw !== pNewPw2) { setPwMsg({ ok: false, text: "새 비밀번호가 일치하지 않습니다." }); return; }
-    if (pNewPw.length < 4) { setPwMsg({ ok: false, text: "비밀번호는 4자 이상이어야 합니다." }); return; }
-    const result = resetPassword(pId, pName, pEmail, pNewPw);
-    if (!result.ok) { setPwMsg({ ok: false, text: result.message }); return; }
-    setPwMsg({ ok: true, text: "비밀번호가 재설정되었습니다. 새 비밀번호로 로그인해 주세요." });
-  }
-
-  return (
-    <ModalShell title="아이디 / 비밀번호 찾기" onClose={onClose}>
-      <div className="grid grid-cols-2 rounded-sm overflow-hidden mb-4 border border-border">
-        <button onClick={() => setTab("id")} className={`py-2.5 text-sm font-semibold transition-colors ${tab === "id" ? "text-white" : "text-muted-foreground"}`}
-          style={tab === "id" ? { backgroundColor: NAV } : undefined}>
-          아이디 찾기
-        </button>
-        <button onClick={() => setTab("pw")} className={`py-2.5 text-sm font-semibold transition-colors ${tab === "pw" ? "text-white" : "text-muted-foreground"}`}
-          style={tab === "pw" ? { backgroundColor: NAV } : undefined}>
-          비밀번호 찾기
-        </button>
-      </div>
-
-      {tab === "id" ? (
-        <form onSubmit={handleFindId} className="flex flex-col gap-3.5">
-          <Field icon={UserIcon} label="이름" placeholder="이름" value={fName} onChange={setFName} />
-          <Field icon={Mail} label="이메일" placeholder="이메일" type="email" value={fEmail} onChange={setFEmail} autoComplete="email" />
-          <button type="submit" className="mt-1 flex items-center justify-center gap-1.5 py-3 rounded-sm text-sm font-semibold text-white hover:opacity-90 transition-opacity" style={{ backgroundColor: NAV }}>
-            <Search className="w-4 h-4" /> 아이디 조회
-          </button>
-          {idResult && (
-            idResult.ok ? (
-              <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-sm text-sm font-medium" style={{ backgroundColor: withAlpha(GREEN, 0.08), color: GREEN }}>
-                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                회원님의 아이디는 <span style={{ fontFamily: MONO }}>{idResult.id}</span> 입니다.
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 text-sm font-medium" style={{ color: RED }}>
-                <AlertCircle className="w-4 h-4 flex-shrink-0" /> {idResult.message}
-              </div>
-            )
-          )}
-        </form>
-      ) : (
-        <form onSubmit={handleResetPw} className="flex flex-col gap-3.5">
-          <Field icon={UserIcon} label="아이디" placeholder="아이디" value={pId} onChange={setPId} autoComplete="username" />
-          <Field icon={UserIcon} label="이름" placeholder="이름" value={pName} onChange={setPName} />
-          <Field icon={Mail} label="이메일" placeholder="이메일" type="email" value={pEmail} onChange={setPEmail} autoComplete="email" />
-          <div className="h-px my-0.5 bg-border" />
-          <Field icon={KeyRound} label="새 비밀번호" placeholder="새 비밀번호" type="password" value={pNewPw} onChange={setPNewPw} autoComplete="new-password" />
-          <Field icon={KeyRound} label="새 비밀번호 확인" placeholder="새 비밀번호 확인" type="password" value={pNewPw2} onChange={setPNewPw2} autoComplete="new-password" />
-          <button type="submit" className="mt-1 py-3 rounded-sm text-sm font-semibold text-white hover:opacity-90 transition-opacity" style={{ backgroundColor: NAV }}>
-            비밀번호 재설정
-          </button>
-          {pwMsg && (
-            <div className="flex items-center gap-2 text-sm font-medium" style={{ color: pwMsg.ok ? GREEN : RED }}>
-              {pwMsg.ok ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
-              {pwMsg.text}
-            </div>
-          )}
-        </form>
-      )}
-    </ModalShell>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Field — 라벨을 입력창 위에 명시 (공공기관 웹접근성 관례)                */
-/* ------------------------------------------------------------------ */
-function Field({ icon: Icon, label, placeholder, type = "text", value, onChange, trailing, autoComplete }: {
-  icon: LucideIcon; label: string; placeholder: string; type?: string; value: string; onChange: (v: string) => void; trailing?: ReactNode; autoComplete?: string;
+function Field({ icon: Icon, label, placeholder, type = "text", value, onChange, trailing, autoComplete, compact, error, reserveError }: {
+  icon: LucideIcon; label: string; placeholder: string; type?: string; value: string; onChange: (v: string) => void; trailing?: ReactNode; autoComplete?: string; compact?: boolean; error?: string; reserveError?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-1">
       <label className="text-sm font-medium text-foreground">{label}</label>
-      <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-sm border border-border bg-background focus-within:ring-2 focus-within:ring-primary/30 transition-colors">
+      <div
+        className={`flex items-center gap-2.5 px-3.5 rounded-md border border-border bg-background focus-within:ring-2 focus-within:ring-primary/30 focus-within:border-primary/40 transition-colors ${compact ? "py-1.5" : "py-2"}`}
+        style={{ borderColor: error ? withAlpha(RED, 0.5) : undefined }}
+      >
         <Icon className="w-4 h-4 flex-shrink-0 text-muted-foreground" />
         <input
           type={type}
@@ -338,10 +447,24 @@ function Field({ icon: Icon, label, placeholder, type = "text", value, onChange,
           value={value}
           onChange={(e) => onChange(e.target.value)}
           autoComplete={autoComplete}
-          className="flex-1 min-w-0 text-sm bg-transparent outline-none text-foreground"
+          className="flex-1 min-w-0 truncate text-sm bg-transparent outline-none text-foreground"
         />
         {trailing}
       </div>
+      {reserveError && (
+        <div className="min-h-[14px] flex items-center overflow-hidden">
+          {error && (
+            <div
+              className="flex items-center gap-1 text-xs font-medium min-w-0 w-full"
+              style={{ color: RED }}
+              title={error}
+            >
+              <AlertCircle className="w-3 h-3 flex-shrink-0" />
+              <span className="truncate">{error}</span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

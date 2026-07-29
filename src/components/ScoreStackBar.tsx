@@ -1,9 +1,9 @@
-// 이관 우선순위 점수를 막대그래프로 표시하고, 클릭/탭 또는 마우스오버 시 점수 산정 근거를 툴팁으로 보여주는 컴포넌트
+// 매칭 스코어(M)를 막대그래프로 표시하고, 클릭/탭 또는 마우스오버 시 점수 산정 근거를 툴팁으로 보여주는 컴포넌트
 import { useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { RelocationItem } from "../types";
-import { NAV, BLUE, TEAL, RED } from "../constants/colors";
-import { DEMAND_POINTS } from "../data/relocationQueue";
+import { NAV, BLUE, TEAL, AMBER, GREEN } from "../constants/colors";
+
 const TOOLTIP_WIDTH = 224;
 const TOOLTIP_MARGIN = 8;
 // 바 그래프의 개별 항목 시각 폭 상한(%). 실제 데이터 값이 아니라 UI 상 겹침 방지용 캡이라 별도 상수로 명시.
@@ -19,14 +19,36 @@ export function ScoreStackBar({ item }: { item: RelocationItem }) {
   const triggerRef = useRef<HTMLDivElement>(null);
   const [tooltipPos, setTooltipPos] = useState<TooltipPosition | null>(null);
 
-  const demandRaw   = DEMAND_POINTS[item.genreDemand] ?? 70;
-  const demandC     = +(demandRaw * 0.4).toFixed(1);
-  const stockC      = +(item.stockShortage * 0.35).toFixed(1);
-  const distPenalty = +(item.distance * 2.5).toFixed(1);
-  const totalPos    = demandC + stockC;
+  // Fdist는 PDF 원식상 0~1 값이다 (1 / (1 + e^(0.2×(d−15)))).
+  // 나머지 세 지표(Sdemand/Sgap/Sspace)는 0~100 스케일이라 그대로 가중합하면 거리 요소의 영향력이
+  // 사실상 사라지므로, 100배 스케일링 후 0.3 가중치를 적용한다 → 실질 가중치는 0.3×100 = 30.
+  const distC = +(item.fDist * 30).toFixed(1);
+  const demandC = +(item.sDemand * 0.25).toFixed(1);
+  const gapC = +(item.sGap * 0.25).toFixed(1);
+  const spaceC = +(item.sSpace * 0.2).toFixed(1);
 
-  const demandPx = totalPos > 0 ? Math.round((demandC / totalPos) * item.score) : 0;
-  const stockPx  = item.score - demandPx;
+  const total = distC + demandC + gapC + spaceC;
+
+  const rows = [
+    { label: "거리 감쇄", weight: "×0.30", raw: (item.fDist * 100).toFixed(1), contrib: `+${distC}`, color: BLUE, bar: distC },
+    { label: "도서 수요도", weight: "×0.25", raw: `${item.sDemand}`, contrib: `+${demandC}`, color: TEAL, bar: demandC },
+    { label: "수급 불일치 해소", weight: "×0.25", raw: `${item.sGap}`, contrib: `+${gapC}`, color: AMBER, bar: gapC },
+    {
+      label: "공간 효율성",
+      weight: "×0.20",
+      raw: item.isSmallLibrary ? `${item.sSpace} (소규모 +15 반영)` : `${item.sSpace}`,
+      contrib: `+${spaceC}`,
+      color: GREEN,
+      bar: spaceC,
+    },
+  ];
+
+  // 상단 미니 스택바: 막대 전체 길이가 최종 점수(item.score, 0~100)를 나타내고, 그 길이 안에서 4개 지표의 기여도 비율만큼 색을 나눈다.
+  const scoreCapped = Math.min(100, item.score);
+  const segments = rows.map((row) => ({
+    color: row.color,
+    pct: total > 0 ? (row.bar / total) * scoreCapped : 0,
+  }));
 
   const computePosition = () => {
     const rect = triggerRef.current?.getBoundingClientRect();
@@ -63,12 +85,6 @@ export function ScoreStackBar({ item }: { item: RelocationItem }) {
     };
   }, [tooltipPos]);
 
-  const rows = [
-    { label: "장르 수요",   weight: "×0.40",  raw: demandRaw,          contrib: `+${demandC}`,     color: BLUE, bar: demandC   },
-    { label: "재고 부족률", weight: "×0.35",  raw: item.stockShortage, contrib: `+${stockC}`,      color: TEAL, bar: stockC    },
-    { label: "거리 패널티", weight: "−×0.25", raw: item.distance,      contrib: `−${distPenalty}`, color: RED,  bar: distPenalty },
-  ];
-
   return (
     <div
       ref={triggerRef}
@@ -83,8 +99,9 @@ export function ScoreStackBar({ item }: { item: RelocationItem }) {
     >
       <div className="flex items-center gap-2">
         <div className="w-20 h-3 bg-muted rounded-sm overflow-hidden flex flex-shrink-0">
-          <div style={{ width: `${demandPx}%`, backgroundColor: BLUE }} />
-          <div style={{ width: `${stockPx}%`,  backgroundColor: TEAL }} />
+          {segments.map((seg, i) => (
+            <div key={i} style={{ width: `${seg.pct}%`, backgroundColor: seg.color }} />
+          ))}
         </div>
         <span className="text-xs font-bold flex-shrink-0" style={{ color: NAV, fontFamily: "'JetBrains Mono', monospace" }}>
           {item.score}
@@ -101,7 +118,7 @@ export function ScoreStackBar({ item }: { item: RelocationItem }) {
             transform: tooltipPos.placement === "above" ? "translateY(-100%)" : undefined,
           }}
         >
-          <p className="text-[11px] font-semibold text-foreground mb-2">점수 구성 요소</p>
+          <p className="text-[11px] font-semibold text-foreground mb-2">매칭 스코어 구성 요소</p>
           <p className="text-[9px] text-muted-foreground mb-2 leading-snug">
             ※ 반올림으로 인해 항목 합산치가 최종 점수와 소수점 단위로 다를 수 있습니다.
           </p>
@@ -116,7 +133,7 @@ export function ScoreStackBar({ item }: { item: RelocationItem }) {
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="text-[10px] text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                      {row.raw}{row.label === "거리 패널티" ? " km" : ""}
+                      {row.raw}
                     </span>
                     <span className="text-[10px] font-bold" style={{ color: row.color, fontFamily: "'JetBrains Mono', monospace" }}>
                       {row.contrib}
@@ -133,9 +150,11 @@ export function ScoreStackBar({ item }: { item: RelocationItem }) {
             <span className="text-[10px] font-semibold text-foreground">최종 점수</span>
             <span className="text-xs font-bold" style={{ color: NAV, fontFamily: "'JetBrains Mono', monospace" }}>{item.score}점</span>
           </div>
-          <div className="mt-2 flex items-center gap-2 text-[9px] text-muted-foreground">
-            <span className="flex items-center gap-1"><span className="w-2 h-1.5 rounded-sm" style={{ backgroundColor: BLUE }} />장르수요</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-1.5 rounded-sm" style={{ backgroundColor: TEAL }} />재고부족률</span>
+          <div className="mt-2 flex items-center gap-2 flex-wrap text-[9px] text-muted-foreground">
+            <span className="flex items-center gap-1"><span className="w-2 h-1.5 rounded-sm" style={{ backgroundColor: BLUE }} />거리감쇄</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-1.5 rounded-sm" style={{ backgroundColor: TEAL }} />수요도</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-1.5 rounded-sm" style={{ backgroundColor: AMBER }} />불일치해소</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-1.5 rounded-sm" style={{ backgroundColor: GREEN }} />공간효율성</span>
           </div>
         </div>,
         document.body

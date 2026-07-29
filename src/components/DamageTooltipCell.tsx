@@ -3,7 +3,6 @@ import { Book } from "../types";
 import { getDotColor, getDotLabel } from "./lib";
 
 export function DamageTooltipCell({ book }: { book: Book }) {
-  // 개선: 기존 개별 fallback(|| "#9CA3AF") 로직을 공용 유틸(getDotColor/getDotLabel)로 통일
   const dmgColor = getDotColor(book.damage);
   const dmgLabel = getDotLabel(book.damage);
 

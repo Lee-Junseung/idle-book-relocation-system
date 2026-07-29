@@ -8,7 +8,7 @@ import { clampScore, getDotColor, getDotLabel, withAlpha } from "./lib";
 
 type Scores = Omit<DamageInspection, "inspector" | "date">;
 
-// 개선: 점수 버튼이 1~5 리터럴 유니언(ScoreValue)으로 타입 좁혀지도록 as const 사용
+// 점수 버튼이 1~5 리터럴 유니언(ScoreValue)으로 타입 좁혀지도록 as const 사용
 const SCORE_OPTIONS = [1, 2, 3, 4, 5] as const;
 
 const DEFAULT_SCORES: Scores = {
@@ -18,8 +18,7 @@ const DEFAULT_SCORES: Scores = {
   useDuplicate: 3, useDemand: 3, useRarity: 3, useShelfEfficiency: 3, useDonation: 3,
 };
 
-// initial(DamageInspection)에서 inspector/date를 제거해 Scores 타입에 맞는 순수 점수 객체만 남긴다.
-// 기존 코드는 { ...initial }을 그대로 Scores state에 넣어 타입과 실제 런타임 값이 어긋났었음.
+// initial(DamageInspection)에서 inspector/date를 제거해 Scores 타입에 맞는 순수 점수 객체만 남김.
 function toScores(initial?: DamageInspection): Scores {
   if (!initial) return { ...DEFAULT_SCORES };
   const { inspector: _inspector, date: _date, ...rest } = initial;
@@ -54,7 +53,7 @@ export function InspectionChecklistModal({
     setDirty(true);
   }
 
-  // 개선: 입력 중이던 점수/점검자명이 있으면 배경 클릭·Esc로 실수로 닫는 것을 방지
+  // 입력 중이던 점수/점검자명이 있으면 배경 클릭·Esc로 실수로 닫는 것을 방지
   function requestClose() {
     if (dirty && !window.confirm("변경사항이 저장되지 않았습니다. 닫으시겠습니까?")) return;
     onClose();
@@ -73,7 +72,6 @@ export function InspectionChecklistModal({
     document.addEventListener("keydown", handleKeyDown);
     containerRef.current?.focus();
     return () => document.removeEventListener("keydown", handleKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dirty]);
 
   return (
@@ -121,7 +119,7 @@ export function InspectionChecklistModal({
                           <button key={n} type="button" onClick={() => updateScore(item.key, n)}
                             className="w-7 h-7 rounded-full border text-xs font-semibold flex items-center justify-center transition-colors"
                             style={{
-                              // 버그 수정: val이 1~5 범위를 벗어나도 DOT_COLORS[val]이 undefined가 되지 않도록 getDotColor 사용
+                              // val이 1~5 범위를 벗어나도 DOT_COLORS[val]이 undefined가 되지 않도록 getDotColor 사용
                               backgroundColor: n <= val ? activeColor : "transparent",
                               borderColor: n <= val ? activeColor : "#D1D5DB",
                               color: n <= val ? "#fff" : "#9CA3AF",

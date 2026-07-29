@@ -22,7 +22,7 @@ export function ChartTooltip({ active, payload, label }: ChartTooltipProps) {
           <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
           <span className="text-muted-foreground">{p.name}:</span>
           <span className="font-medium text-foreground" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-            {/* 개선: value가 숫자가 아닐 수 있으므로 toLocaleString 호출 전 타입 체크 */}
+            {/* value가 숫자가 아닐 수 있으므로 toLocaleString 호출 전 타입 체크 */}
             {typeof p.value === "number" ? p.value.toLocaleString() : p.value}
           </span>
         </div>

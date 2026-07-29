@@ -1,20 +1,32 @@
+// 유휴화 도서 수 조회
 export interface IdleBooksCountResponse {
     success: boolean;
-    currentMonthCount: number;
-    lastMonthCount: number;
-    percentageChange: number;
+    data: {
+        currentMonthCount: number;
+        lastMonthCount: number;
+        percentageChange: number;
+    };
 }
 
+// 파손 심사 대기 수 조회
 export interface DamagePendingCountResponse {
     success: boolean;
-    count: number;
+    data: {
+        currentMonthCount: number;
+        lastMonthCount: number;
+        countChange: number;
+    };
 }
 
+// 이관 검토 대기 수 조회
 export interface TransferPendingCountResponse {
     success: boolean;
-    count: number;
+    data: {
+        count: number;
+    };
 }
 
+// 도서관 월별 대출 현황 조회 (data)
 export interface MonthlyLoanPoint {
     date: string; // "2026-04"
     totalBooks: number;
@@ -23,16 +35,19 @@ export interface MonthlyLoanPoint {
     booksDelta: number;
 }
 
+// 도서관 월별 대출 현황 조회
 export interface MonthlyLoansResponse {
     success: boolean;
     data: MonthlyLoanPoint[];
 }
 
+// 지역 인원 분포 목록 조회 (ageDistribution)
 export interface AgeBucket {
     percentage: number;
     count: number;
 }
 
+// 지역 인원 분포 목록 조회
 export interface UsersDistributionResponse {
     success: boolean;
     data: {
@@ -50,6 +65,7 @@ export interface UsersDistributionResponse {
     };
 }
 
+// 수원시 도서관 네트워크 거리 조회 (data)
 export interface LibraryNetworkItem {
     libraryName: string;
     address: string;
@@ -57,6 +73,17 @@ export interface LibraryNetworkItem {
     length: number; // km
 }
 
+// 수원시 도서관 네트워크 거리 조회
 export interface LibraryNetworkResponse {
+    success: boolean;
     data: LibraryNetworkItem[];
+}
+
+// 공통 에러 응답
+// 400/404/500 등 에러 시 공통 형태 (client.ts의 ApiError로 매핑됨)
+export interface ApiErrorBody {
+    success: false;
+    status: number;
+    message: string;
+    error: string;
 }
