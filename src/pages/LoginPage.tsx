@@ -78,6 +78,7 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
       const session: Session = {
         name: res.name,
         email: res.email,
+        nickname: res.nickname,
       };
       onLogin(session);
     } catch (err) {

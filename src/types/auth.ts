@@ -9,6 +9,7 @@ export interface LoginResponse {
     message: string;
     name: string;
     email: string;
+    nickname: string;
 }
 
 // 회원가입 요청

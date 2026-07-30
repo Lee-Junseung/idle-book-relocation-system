@@ -1,10 +1,9 @@
-// 6개월 이상 대출 이력이 없어 마모 점검이 필요한 도서 목록을 보여주고, 점검 리스트 등록을 시작하는 페이지
+// 유휴화 점수 산정 도서 중 점검 리스트가 등록되지 않은 도서 목록을 보여주고, 점검 리스트 등록을 시작하는 페이지
 import { useState } from "react";
 import { ClipboardList, CalendarClock } from "lucide-react";
 import { Card, SectionHeader, InspectionChecklistModal } from "../components";
 import { NAV } from "../constants/colors";
 import { IdleScoreBar } from "../components/IdleScoreBar";
-import { monthsSince } from "../data/wearUtils";
 import { Book, DamageInspection } from "../types";
 import { averageScore } from "../data/damageInspections";
 import { clampToScore } from "../data/seed";
@@ -21,20 +20,18 @@ export function WearQueuePage({
   const branchFilter = "북수원도서관";
   const [checklistTarget, setChecklistTarget] = useState<Book | null>(null);
 
-  // 필터 기준: 최근 대출일로부터 6개월 이상 경과 + 아직 점검 리스트 미등록
-  const queueBooks = books
-    .filter((b) => {
-      const insp = inspections[b.id];
-      const isNotInspected = !insp || insp.date === "-";
-      return b.branch === branchFilter && monthsSince(b.lastLoan) >= 6 && isNotInspected;
-    })
-    .sort((a, b2) => monthsSince(b2.lastLoan) - monthsSince(a.lastLoan));
+  // 필터 기준: 유휴화 점수 목록(books)에 포함된 해당 지점 도서 중 점검 리스트 미등록 건
+  // 정렬은 별도로 하지 않고 서버(유휴화 점수 API)가 내려준 순서를 그대로 사용
+  const queueBooks = books.filter((b) => {
+    const insp = inspections[b.id];
+    const isNotInspected = !insp || insp.date === "-";
+    return b.branch === branchFilter && isNotInspected;
+  });
 
   const handleChecklistSave = (insp: DamageInspection) => {
     if (!checklistTarget) return;
     const targetId = checklistTarget.id;
     setInspections((prev) => ({ ...prev, [targetId]: insp }));
-    // 개선: 인라인 클램프 중복 대신 공용 clampToScore 사용 (ScoreValue 타입과도 정합)
     const avgRounded = clampToScore(averageScore(insp));
     setBooks((prev) => prev.map((b) => b.id === targetId ? { ...b, damage: avgRounded } : b));
     setChecklistTarget(null);
@@ -99,7 +96,7 @@ export function WearQueuePage({
             </table>
           </div>
           <div className="px-4 py-3 border-t border-border bg-muted/20">
-            <span className="text-sm text-muted-foreground">{queueBooks.length}건 · 최근 대출일로부터 6개월 이상 경과한 도서입니다</span>
+            <span className="text-sm text-muted-foreground">{queueBooks.length}건 · 유휴화 점수 산정 도서 중 점검 리스트가 등록되지 않은 도서입니다</span>
           </div>
         </Card>
       </div>

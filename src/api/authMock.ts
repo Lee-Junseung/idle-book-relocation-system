@@ -13,6 +13,7 @@ const MOCK_ACCOUNT = {
     password: "admin",
     name: "지형곤",
     email: "test@example.com",
+    nickname: "택훈아버님",
 };
 
 // 회원가입 시 등록된 아이디/이메일/사서코드를 기억해서 중복 가입(409) 케이스를 재현하기 위한 임시 저장소
@@ -29,6 +30,7 @@ export const loginMock = ({ id, password }: LoginRequest): Promise<LoginResponse
         message: "로그인 성공",
         name: MOCK_ACCOUNT.name,
         email: MOCK_ACCOUNT.email,
+        nickname: MOCK_ACCOUNT.nickname,
     });
 };
 
@@ -40,7 +42,7 @@ export const registerMock = ({ id, password, name, email, nickname, librarianCod
         throw new ApiError("이미 존재하는 이메일입니다.", 409, "Conflict");
     }
     if (registeredLibrarianCodes.has(librarianCode)) {
-        throw new ApiError("이미 존재하는 사서번호입니다.", 409, "Conflict");
+        throw new ApiError("이미 존재하는 사서 번호입니다.", 409, "Conflict");
     }
 
     registeredIds.add(id);
