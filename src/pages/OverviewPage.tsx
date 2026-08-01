@@ -12,6 +12,8 @@ import {
 
 import { Card, MetricCard, withAlpha } from "../components";
 import { NAV, BLUE, RED, PURPLE, AMBER, BROWN, PIE_COLORS } from "../constants/colors";
+import { CURRENT_LIBRARY } from "../constants/library";
+import { ApiError } from "../api/client";
 import {
   getIdleBooksCount,
   getDamagePendingCount,
@@ -20,6 +22,7 @@ import {
   getUsersDistribution,
   getLibraryNetworkDistances,
 } from "../api/dashboard";
+import type { DashboardErrorState } from "../types/dashboard";
 
 // 화면에서 쓰는 로컬 도메인 타입
 interface LoanTrendPoint { month: string; collection: number; loans: number; turnover: number }
@@ -43,8 +46,6 @@ const AGE_LABELS = {
   age60Plus: "60대 이상",
 } as const;
 
-const HUB_LIBRARY_NAME = "북수원도서관";
-
 export function OverviewPage() {
   const [loanTrendData, setLoanTrendData] = useState<LoanTrendPoint[]>([]);
   const [demographicsData, setDemographicsData] = useState<DemographicPoint[]>([]);
@@ -60,7 +61,7 @@ export function OverviewPage() {
   });
 
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<DashboardErrorState | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -76,8 +77,8 @@ export function OverviewPage() {
           usersDistribution,
           libraryNetwork,
         ] = await Promise.all([
-          getIdleBooksCount(),
-          getDamagePendingCount(),
+          getIdleBooksCount(CURRENT_LIBRARY.id),
+          getDamagePendingCount(CURRENT_LIBRARY.id),
           getTransferPendingCount(),
           getMonthlyLoans(),
           getUsersDistribution(),
@@ -132,11 +133,20 @@ export function OverviewPage() {
           district: b.address,
           collection: b.bookCount,
           distance: b.length,
-          hub: b.libraryName === HUB_LIBRARY_NAME,
+          hub: b.libraryName === CURRENT_LIBRARY.name,
         }));
         setBranches(branchList);
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "데이터를 불러오지 못했습니다.");
+        if (cancelled) return;
+        if (e instanceof ApiError) {
+          setError({
+            message: e.message,
+            errorType: e.error,
+            statusCode: e.statusCode,
+          });
+        } else {
+          setError({ message: e instanceof Error ? e.message : "데이터를 불러오지 못했습니다." });
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -177,7 +187,16 @@ export function OverviewPage() {
   }
 
   if (error) {
-    return <div className="p-4 sm:p-6 text-sm text-red-500">{error}</div>;
+    return (
+      <div className="p-4 sm:p-6 flex items-start gap-2.5 text-sm text-red-500">
+        {error.errorType && (
+          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 flex-shrink-0 whitespace-nowrap">
+            {error.statusCode ?? ""} {error.errorType}
+          </span>
+        )}
+        <span>{error.message}</span>
+      </div>
+    );
   }
 
   return (
@@ -190,8 +209,8 @@ export function OverviewPage() {
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold text-foreground">북수원도서관</span>
-            <span className="text-xs text-muted-foreground break-words">경기도 수원시 장안구 정조로 944</span>
+            <span className="text-sm font-semibold text-foreground">{CURRENT_LIBRARY.name}</span>
+            <span className="text-xs text-muted-foreground break-words">{CURRENT_LIBRARY.address}</span>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
             수원시 공공도서관 네트워크 연결 · 이관 알고리즘 기준점
@@ -218,7 +237,7 @@ export function OverviewPage() {
       <Card className="p-3.5 sm:p-4 flex flex-col">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-3">
           <div>
-            <h3 className="text-foreground">북수원도서관 월별 대출 현황</h3>
+            <h3 className="text-foreground">{CURRENT_LIBRARY.name} 월별 대출 현황</h3>
             <p className="text-xs text-muted-foreground mt-0.5">
               소장 도서 수 · 대출 건수 · 평균 회전율
             </p>
@@ -351,7 +370,9 @@ export function OverviewPage() {
 
         <Card className="p-3.5 sm:p-4 flex flex-col h-full">
           <h3 className="text-foreground mb-1">수원시 도서관 네트워크</h3>
-          <p className="text-xs text-muted-foreground mb-3">이관 알고리즘 기준 분관 현황 (북수원도서관 기준)</p>
+          <p className="text-xs text-muted-foreground mb-3">
+            이관 알고리즘 기준 분관 현황 ({CURRENT_LIBRARY.name} 기준)
+          </p>
           <div className="flex flex-col gap-1.5">
             {branches.map((b) => (
               <div key={b.id} className="flex items-center gap-2 sm:gap-2.5 px-2.5 py-2 rounded border border-border">

@@ -10,9 +10,11 @@ import { NAV, BLUE, GREEN, RED, AMBER } from "../constants/colors";
 import { fetchRelocationQueue } from "../data";
 import { RelocationItem, ModalConfig } from "../types";
 
+import { CURRENT_LIBRARY } from "../constants/library";
+
 function RelocationRowCells({ item, onExecute }: { item: RelocationItem; onExecute: (item: RelocationItem) => void }) {
-  const isFrom = item.from === "북수원도서관";
-  const isTo = item.to === "북수원도서관";
+  const isFrom = item.from === CURRENT_LIBRARY.name;
+  const isTo = item.to === CURRENT_LIBRARY.name;
   const done = item.status === "실행완료";
   const closed = item.status === "종료";
   // 같은 Top5 후보 중 다른 항목이 먼저 이관 실행되어 매칭이 종료된 상태
@@ -203,7 +205,7 @@ export function RelocationPage() {
               <button key={d} onClick={() => setDirFilter(d)}
                 className={`px-2.5 py-1 rounded text-xs font-medium transition-colors whitespace-nowrap ${dirFilter === d ? "text-white" : "text-muted-foreground hover:bg-muted"}`}
                 style={dirFilter === d ? { backgroundColor: NAV } : {}}>
-                {d === "전체" ? "전체 방향" : `북수원 ${d}`}
+                {d === "전체" ? "전체 방향" : `${CURRENT_LIBRARY.shortName} ${d}`}
               </button>
             ))}
           </div>

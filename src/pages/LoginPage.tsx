@@ -14,6 +14,7 @@ import { Session } from "../types";
 const MONO = "'JetBrains Mono', monospace";
 const SERIF = "var(--font-serif)";
 const REMEMBER_ID_KEY = "lib_remember_id";
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 const BRASS = "#C9A66B";
 
@@ -347,7 +348,7 @@ function SignupModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
     else if (suPw !== suPw2) errors.pw2 = "비밀번호가 일치하지 않습니다.";
 
     if (!suEmail.trim()) errors.email = "이메일은 필수 입력 값입니다.";
-    else if (!/^\S+@\S+\.\S+$/.test(suEmail.trim())) errors.email = "유효한 이메일 형식이 아닙니다.";
+    else if (!EMAIL_REGEX.test(suEmail.trim())) errors.email = "유효한 이메일 형식이 아닙니다.";
 
     return errors;
   }

@@ -5,6 +5,8 @@ import { Card } from "./Card";
 import { NAV } from "../constants/colors";
 import { withAlpha } from "./lib";
 
+import { CURRENT_LIBRARY } from "../constants/library";
+
 // 커스텀 CSS 변수(--tw-ring-color)를 CSSProperties에 안전하게 얹기 위한 타입 확장
 type StyleWithCssVars = CSSProperties & { [key: `--${string}`]: string | number };
 
@@ -19,7 +21,7 @@ export function MetricCard({ label, value, sub, trend, color, icon: Icon, highli
       style={ringStyle}>
       {highlight && (
         <div className="flex items-center gap-1 -mt-1 mb-0.5">
-          <span className="text-[10px] text-muted-foreground">북수원도서관</span>
+          <span className="text-[10px] text-muted-foreground">{CURRENT_LIBRARY.name}</span>
         </div>
       )}
       <div className="flex items-center justify-between">

@@ -87,3 +87,13 @@ export interface ApiErrorBody {
     message: string;
     error: string;
 }
+
+// 화면단에서 사용할 정규화된 에러 상태.
+// message(사용자용 문구)와 error(에러 타입 뱃지용)를 분리해서 보관한다.
+export interface DashboardErrorState {
+    message: string;
+    errorType?: string;
+    // "Bad Request", "Not Found", "Internal Server Error" 등
+    statusCode?: number;
+    // 400, 404, 500 등
+}

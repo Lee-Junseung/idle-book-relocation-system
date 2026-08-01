@@ -8,6 +8,8 @@ import { Book, DamageInspection } from "../types";
 import { averageScore } from "../data/damageInspections";
 import { clampToScore } from "../data/seed";
 
+import { CURRENT_LIBRARY } from "../constants/library";
+
 export function WearQueuePage({
   books, setBooks, inspections, setInspections, inspectorName,
 }: {
@@ -17,7 +19,7 @@ export function WearQueuePage({
   setInspections: React.Dispatch<React.SetStateAction<Record<string, DamageInspection>>>;
   inspectorName?: string;
 }) {
-  const branchFilter = "북수원도서관";
+  const branchFilter = CURRENT_LIBRARY.name;
   const [checklistTarget, setChecklistTarget] = useState<Book | null>(null);
 
   // 필터 기준: 유휴화 점수 목록(books)에 포함된 해당 지점 도서 중 점검 리스트 미등록 건

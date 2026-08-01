@@ -15,6 +15,8 @@ import { buildMonthlyLoanData } from "../data/wearUtils";
 import { clampToScore } from "../data/seed";
 import { Book, BookStatus, DamageInspection, ModalConfig } from "../types";
 
+import { CURRENT_LIBRARY } from "../constants/library";
+
 const STATUS_META: Record<
   Exclude<BookStatus, "대기">,
   { label: string; verb: string; color: string; icon: "danger" | "warning" }
@@ -33,7 +35,7 @@ export function WearManagePage({
   setInspections: React.Dispatch<React.SetStateAction<Record<string, DamageInspection>>>;
   inspectorName?: string;
 }) {
-  const branchFilter = "북수원도서관";
+  const branchFilter = CURRENT_LIBRARY.name;
   const genres = ["전체 장르", ...Array.from(new Set(books.map((b) => b.genre)))];
 
   const [genreFilter, setGenreFilter] = useState("전체 장르");
@@ -227,10 +229,10 @@ export function WearManagePage({
                     <input type="checkbox" checked={allSel} onChange={toggleAll} className="rounded accent-primary" />
                   </th>
                   {([
-                    { key: "title",    label: "제목 / 저자", hide: "" },
-                    { key: "genre",    label: "장르",         hide: "hidden md:table-cell" },
-                    { key: "damage",   label: "마모 수준",   hide: "" },
-                    { key: "turnover", label: "연 대출률",   hide: "hidden xl:table-cell" },
+                    { key: "title", label: "제목 / 저자", hide: "" },
+                    { key: "genre", label: "장르", hide: "hidden md:table-cell" },
+                    { key: "damage", label: "마모 수준", hide: "" },
+                    { key: "turnover", label: "연 대출률", hide: "hidden xl:table-cell" },
                   ] as { key: keyof Book; label: string; hide: string }[]).map(({ key, label, hide }) => (
                     <th key={key} onClick={() => toggleSort(key)}
                       className={`px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none whitespace-nowrap ${hide}`}>

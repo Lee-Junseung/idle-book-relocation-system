@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 
 import { NAV, RED } from "./constants/colors";
+import { CURRENT_LIBRARY } from "./constants/library";
 import { PageId, Session, Book, BookStatus, DamageInspection } from "./types";
 import { loadSession, logout } from "./data/auth";
 import { ALL_BOOKS } from "./data";
@@ -147,8 +148,8 @@ export default function App() {
               <Pin className="w-[14px] h-[14px]" style={{ color: "var(--sidebar-primary)" }} />
             </div>
             <div className={visibility}>
-              <p className="text-sm font-semibold leading-tight whitespace-nowrap text-white">북수원도서관</p>
-              <p className="text-xs leading-tight whitespace-nowrap text-sidebar-foreground/60">경기도 수원시 장안구</p>
+              <p className="text-sm font-semibold leading-tight whitespace-nowrap text-white">{CURRENT_LIBRARY.name}</p>
+              <p className="text-xs leading-tight whitespace-nowrap text-sidebar-foreground/60">{CURRENT_LIBRARY.shortAddress}</p>
             </div>
           </button>
         </div>
@@ -230,7 +231,7 @@ export default function App() {
             <Building2 className="hidden sm:block w-4 h-4 flex-shrink-0" />
             <span className="hidden sm:inline whitespace-nowrap">수원시 공공도서관 시스템</span>
             <ChevronRight className="hidden sm:block w-[14px] h-[14px] flex-shrink-0" />
-            <span className="hidden sm:inline font-medium whitespace-nowrap" style={{ color: NAV }}>북수원도서관</span>
+            <span className="hidden sm:inline font-medium whitespace-nowrap" style={{ color: NAV }}>{CURRENT_LIBRARY.name}</span>
             <ChevronRight className="hidden sm:block w-[14px] h-[14px] flex-shrink-0" />
             <span className="font-medium text-foreground whitespace-nowrap">{NAV_ITEMS.find((n) => n.id === page)?.label}</span>
           </div>
