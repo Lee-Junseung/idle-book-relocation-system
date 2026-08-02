@@ -18,6 +18,12 @@ export interface Book {
   turnover: number;
   copies: number;
   status: BookStatus;
+  // 유휴화 점수 API(/api/checklists) 응답으로 채워지는 필드.
+  // 점검 리스트가 아직 등록되지 않은 도서(마모 점검 대상)에만 존재하므로 optional.
+  idleScore?: number;
+  sage?: number;
+  sloan?: number;
+  sdecay?: number;
 }
 
 export interface Branch {
@@ -136,10 +142,12 @@ export interface User {
   librarianId: string;
 }
 
-// 로그인 API 응답(name, email)에 실제로 존재하는 필드만 포함.
-// id/librarianId는 로그인 응답에 없고 현재 화면 어디서도 쓰지 않아 제외함.
-// 나중에 로그인 후 id/librarianId가 필요해지면, 백엔드 응답에 포함시키거나 "내 정보 조회" API를 추가로 붙여서 이 타입에 필드를 다시 추가하면 됨.
-export type Session = Pick<User, "name" | "email" | "nickname">;
+// 로그인 API 응답(name, email, nickname, librarianCode, accessToken)에 대응.
+// librarianId는 점검 리스트 등록 API(ChecklistRegisterRequest.librarianCode)에 그대로 쓰인다.
+// accessToken은 로그인 이후 모든 API 요청의 Authorization 헤더에 그대로 사용된다 (api/client.ts 참고).
+export type Session = Pick<User, "name" | "email" | "nickname" | "librarianId"> & {
+  accessToken: string;
+};
 
 export interface LoanHistoryPoint {
   year: string;

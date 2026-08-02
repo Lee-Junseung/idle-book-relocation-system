@@ -14,6 +14,8 @@ const MOCK_ACCOUNT = {
     name: "지형곤",
     email: "test@example.com",
     nickname: "택훈아버님",
+    librarianCode: "LIB-00001",
+    accessToken: "mock-access-token",
 };
 
 // 회원가입 시 등록된 아이디/이메일/사서코드를 기억해서 중복 가입(409) 케이스를 재현하기 위한 임시 저장소
@@ -31,6 +33,8 @@ export const loginMock = ({ id, password }: LoginRequest): Promise<LoginResponse
         name: MOCK_ACCOUNT.name,
         email: MOCK_ACCOUNT.email,
         nickname: MOCK_ACCOUNT.nickname,
+        librarianCode: MOCK_ACCOUNT.librarianCode,
+        accessToken: MOCK_ACCOUNT.accessToken,
     });
 };
 

@@ -10,7 +10,8 @@ import {
 import { NAV, RED } from "./constants/colors";
 import { CURRENT_LIBRARY } from "./constants/library";
 import { PageId, Session, Book, BookStatus, DamageInspection } from "./types";
-import { loadSession, logout } from "./data/auth";
+import { loadSession, logout } from "./api/session";
+import { setUnauthorizedHandler } from "./api/client";
 import { ALL_BOOKS } from "./data";
 import { DAMAGE_INSPECTIONS } from "./data/damageInspections";
 import { DATA_REF_DATE } from "./data/wearUtils";
@@ -74,6 +75,13 @@ export default function App() {
     )
   );
   const [inspections, setInspections] = useState<Record<string, DamageInspection>>(() => ({ ...DAMAGE_INSPECTIONS }));
+
+  // 어떤 API 호출이든 401(인증 만료/실패)을 받으면 세션을 비워 로그인 화면으로 되돌린다.
+  // (client.ts는 App.tsx의 상태를 직접 알 수 없으므로, 마운트 시 콜백을 등록해서 역방향으로 연결한다)
+  useEffect(() => {
+    setUnauthorizedHandler(() => setSession(null));
+    return () => setUnauthorizedHandler(null);
+  }, []);
 
   // 창 크기를 조절하는 동안에는 사이드바가 펼쳐진 상태로 lg 경계를 넘나들지 않도록 무조건 접힌(false) 상태로 강제한다.
   // 안 그러면 fixed 오버레이와 반투명 배경이 리사이즈 중에 순간적으로 나타났다 사라지며 화면이 튀어 보인다.
@@ -245,7 +253,7 @@ export default function App() {
 
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6">
           {page === "overview" && <OverviewPage />}
-          {page === "wear-queue" && <WearQueuePage books={books} setBooks={setBooks} inspections={inspections} setInspections={setInspections} inspectorName={session.name} />}
+          {page === "wear-queue" && <WearQueuePage books={books} setBooks={setBooks} inspections={inspections} setInspections={setInspections} inspectorName={session.name} librarianCode={session.librarianId} />}
           {page === "wear-manage" && <WearManagePage books={books} setBooks={setBooks} inspections={inspections} setInspections={setInspections} inspectorName={session.name} />}
           {page === "relocation" && <RelocationPage />}
         </main>

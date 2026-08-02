@@ -1,19 +1,42 @@
 // 점검 리스트 등록이 완료된 도서를 필터/정렬하고, 폐기·이관·보존을 결정 확정하는 페이지
-import { useState, useMemo } from "react";
+//
+// [API 연동 메모]
+// - 목록(2번)/상세(3번) 조회는 실제 API로 대체했습니다.
+// - 이력 조회(4번) 함수는 api 클라이언트에 준비되어 있으나 이 화면에는 아직
+//   노출하지 않았습니다 (필요 시 getBookHistory 사용).
+// - 폐기/이관/보존 "결정"을 서버에 확정 저장하는 API가 아직 없어서, 해당
+//   상태는 지금처럼 로컬 상태로만 관리됩니다.
+// - 목록 API가 genre/isbn/branch/turnover 를 내려주지 않아 임시값으로 채웁니다.
+//   (src/types/checklistApi.ts의 mapCompletedItemToBook 참고)
+// - 백엔드에 전역 예외 핸들러가 없어 없는 리소스 조회 시 500(비JSON)이 내려올
+//   수 있어, 프론트에서 이를 감지해 우호적인 메시지로 표시합니다.
+//
+// 로컬 개발 중 백엔드 없이 화면만 확인하려면 아래 import 한 줄만 바꾸면 됩니다.
+import * as checklistApi from "../api/checklistApi";
+// import * as checklistApi from "../api/checklistApi.mock";
+
+import { useState, useMemo, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import {
   Trash2, MoveRight, BookMarked,
   ChevronUp, ChevronDown, Check, Clock, ListFilter,
-  X, Search, ClipboardEdit,
+  X, Search, ClipboardEdit, Tag, Loader2, AlertTriangle, History,
 } from "lucide-react";
 
 import { Card, SectionHeader, DamageDot, DamageTooltipCell, ConfirmModal, InspectionChecklistModal, withAlpha, getDotColor, getDotLabel } from "../components";
 import { NAV, GREEN, RED, PURPLE, AMBER } from "../constants/colors";
 import { BOOK_LOAN_HISTORY, BOOK_DAMAGE_REASON } from "../data/bookDetails";
-import { INSP_ITEMS_FLAT, averageScore } from "../data/damageInspections";
+import { INSP_ITEMS_FLAT, averageScore } from "../constants/checklistItems";
 import { buildMonthlyLoanData } from "../data/wearUtils";
 import { clampToScore } from "../data/seed";
 import { Book, BookStatus, DamageInspection, ModalConfig } from "../types";
+import {
+  ChecklistApiError,
+  BookDetailResult,
+  ChecklistHistoryEntry,
+  mapCompletedItemToBook,
+  UpdateCheckResultInput,
+} from "../types/checklistApi";
 
 import { CURRENT_LIBRARY } from "../constants/library";
 
@@ -48,12 +71,98 @@ export function WearManagePage({
   const [panelBook, setPanelBook] = useState<Book | null>(null);
   const [checklistTarget, setChecklistTarget] = useState<Book | null>(null);
 
-  const inspectedBooks = books.filter((b) => !!inspections[b.id]);
+  // --- API 연동: 목록 조회 ---------------------------------------------
+  const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
+  // bookId -> resultBatchId (상세 수정 PUT 호출 시 필요)
+  const [resultBatchByBookId, setResultBatchByBookId] = useState<Record<string, number>>({});
+
+  const loadCompletedList = () => {
+    setListLoading(true);
+    setListError(null);
+    checklistApi
+      .getCompletedChecklists()
+      .then((items) => {
+        const mapped = items.map((item) => mapCompletedItemToBook(item, branchFilter));
+        setBooks(mapped);
+        setResultBatchByBookId(
+          Object.fromEntries(items.map((item) => [String(item.bookId), item.resultBatchId]))
+        );
+      })
+      .catch((err: unknown) => {
+        const message =
+          err instanceof ChecklistApiError ? err.message : "점검 완료 도서 목록을 불러오지 못했습니다.";
+        setListError(message);
+      })
+      .finally(() => setListLoading(false));
+  };
+
+  useEffect(() => {
+    loadCompletedList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // --- API 연동: 상세 조회 (행 패널을 펼칠 때) ---------------------------
+  const [bookDetail, setBookDetail] = useState<BookDetailResult | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!panelBook) {
+      setBookDetail(null);
+      setDetailError(null);
+      return;
+    }
+    setDetailLoading(true);
+    setDetailError(null);
+    checklistApi
+      .getBookDetail(Number(panelBook.id))
+      .then((detail) => setBookDetail(detail))
+      .catch((err: unknown) => {
+        const message =
+          err instanceof ChecklistApiError ? err.message : "점검 상세 정보를 불러오지 못했습니다.";
+        setDetailError(message);
+        setBookDetail(null);
+      })
+      .finally(() => setDetailLoading(false));
+  }, [panelBook]);
+
+  // --- API 연동: 전체 점검 이력 (4번, 버튼 클릭 시 조회) -----------------
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyEntries, setHistoryEntries] = useState<ChecklistHistoryEntry[]>([]);
+
+  useEffect(() => {
+    // 도서(패널) 전환 시 이력 패널은 접힌 상태로 초기화
+    setHistoryOpen(false);
+    setHistoryError(null);
+    setHistoryEntries([]);
+  }, [panelBook]);
+
+  const toggleHistory = (bookId: string) => {
+    if (historyOpen) { setHistoryOpen(false); return; }
+    setHistoryOpen(true);
+    setHistoryLoading(true);
+    setHistoryError(null);
+    checklistApi
+      .getBookHistory(Number(bookId))
+      .then((entries) => setHistoryEntries(entries))
+      .catch((err: unknown) => {
+        const message =
+          err instanceof ChecklistApiError ? err.message : "점검 이력을 불러오지 못했습니다.";
+        setHistoryError(message);
+        setHistoryEntries([]);
+      })
+      .finally(() => setHistoryLoading(false));
+  };
+
+  const inspectedBooks = books.filter((b) => !!inspections[b.id] || !!resultBatchByBookId[b.id]);
 
   const filtered = useMemo(() => {
     let list = books.filter((b) =>
       b.branch === branchFilter &&
-      !!inspections[b.id] &&
+      (!!inspections[b.id] || !!resultBatchByBookId[b.id]) &&
       (genreFilter === "전체 장르" || b.genre === genreFilter) &&
       b.damage >= damageMin &&
       (search === "" || b.title.includes(search) || b.isbn.includes(search) || b.id.includes(search))
@@ -62,7 +171,7 @@ export function WearManagePage({
       const av = a[sortKey] as string | number, bv = b2[sortKey] as string | number;
       return sortDir === "asc" ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
     });
-  }, [books, inspections, branchFilter, genreFilter, damageMin, search, sortKey, sortDir]);
+  }, [books, inspections, resultBatchByBookId, branchFilter, genreFilter, damageMin, search, sortKey, sortDir]);
 
   const applyAction = (ids: string[], status: BookStatus) =>
     setBooks((prev) => prev.map((b) => ids.includes(b.id) ? { ...b, status } : b));
@@ -80,6 +189,8 @@ export function WearManagePage({
         lastLoan: book.lastLoan, damage: book.damage,
         turnover: book.turnover, branch: book.branch,
       },
+      // ⚠️ 폐기/이관/보존 "결정"을 서버에 확정 저장하는 API가 아직 없어
+      // 지금은 로컬 상태만 갱신합니다. API가 추가되면 여기서 호출해야 합니다.
       onConfirm: () => applyAction([book.id], status),
     });
   };
@@ -122,13 +233,63 @@ export function WearManagePage({
     keep: inspectedBooks.filter((b) => b.status === "보존결정").length,
   };
 
-  const handleChecklistSave = (insp: DamageInspection) => {
+  const [saving, setSaving] = useState(false);
+
+  const handleChecklistSave = async (insp: DamageInspection) => {
     if (!checklistTarget) return;
     const targetId = checklistTarget.id;
+
+    // 화면(로컬) 상태는 기존과 동일하게 즉시 반영합니다.
     setInspections((prev) => ({ ...prev, [targetId]: insp }));
     const avgRounded = clampToScore(averageScore(insp));
     setBooks((prev) => prev.map((b) => b.id === targetId ? { ...b, damage: avgRounded } : b));
-    setChecklistTarget(null);
+
+    // --- API 연동: 점검 결과 수정 (PUT) --------------------------------
+    // INSP_ITEMS_FLAT의 각 항목이 checkItemId를 갖고 있으므로 그대로 매핑합니다.
+    const resultBatchId = resultBatchByBookId[targetId];
+    // ⚠️ isPassed 판정 기준(몇 점 이하를 "통과"로 볼지)은 아직 정책이 확정되지
+    // 않아 1점(양호)만 통과로 임시 처리합니다 — 기준 확정되면 교체 필요.
+    const checkResults: UpdateCheckResultInput[] = INSP_ITEMS_FLAT.map(({ key, checkItemId }) => {
+      const value = insp[key] as unknown as number;
+      return {
+        checkItemId,
+        isPassed: value <= 1,
+        itemScore: value,
+      };
+    });
+
+    if (!resultBatchId) {
+      console.warn(
+        `[WearManagePage] "${targetId}" 도서의 resultBatchId를 찾을 수 없어 서버 저장을 건너뜁니다. ` +
+        "(점검 완료 목록 응답에 해당 도서가 없거나 새로고침이 필요할 수 있습니다)"
+      );
+      setChecklistTarget(null);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await checklistApi.updateChecklistResult(resultBatchId, { checkResults });
+      // 상세 패널이 같은 도서를 보고 있다면 최신 상태로 갱신
+      if (panelBook?.id === targetId) {
+        const detail = await checklistApi.getBookDetail(Number(targetId));
+        setBookDetail(detail);
+      }
+    } catch (err: unknown) {
+      const message =
+        err instanceof ChecklistApiError ? err.message : "점검 결과 저장 중 오류가 발생했습니다.";
+      setModal({
+        title: "저장 실패",
+        body: message,
+        confirmLabel: "확인",
+        confirmColor: RED,
+        icon: "danger",
+        onConfirm: () => { },
+      });
+    } finally {
+      setSaving(false);
+      setChecklistTarget(null);
+    }
   };
 
   return (
@@ -165,6 +326,16 @@ export function WearManagePage({
           </button>
         </SectionHeader>
 
+        {listError && (
+          <Card className="p-4 flex items-center gap-2 border" style={{ borderColor: withAlpha(RED, 0.3), backgroundColor: withAlpha(RED, 0.05) }}>
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" style={{ color: RED }} />
+            <span className="text-sm text-foreground flex-1">{listError}</span>
+            <button onClick={loadCompletedList} className="text-sm font-medium underline" style={{ color: RED }}>
+              다시 시도
+            </button>
+          </Card>
+        )}
+
         <div className="flex flex-wrap gap-2">
           {[
             { label: "필터 결과", count: stats.total, color: "#6B7280" },
@@ -188,17 +359,21 @@ export function WearManagePage({
             <label className="text-sm text-muted-foreground font-medium">검색</label>
             <div className="relative">
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input type="text" placeholder="제목 / ISBN / ID…" value={search}
+              <input type="text" placeholder="제목 / ISBN…" value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-8 pr-3 py-2 text-sm rounded-md border border-border bg-background w-44 focus:outline-none focus:ring-2 focus:ring-primary/40" />
+                className="w-50 pl-8 pr-3 py-2 text-sm rounded-md border border-border bg-background w-44 focus:outline-none focus:ring-2 focus:ring-primary/40" />
             </div>
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-sm text-muted-foreground font-medium">장르</label>
-            <select value={genreFilter} onChange={(e) => setGenreFilter(e.target.value)}
-              className="px-3 py-2 text-sm rounded-md border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40">
-              {genres.map((g) => <option key={g}>{g}</option>)}
-            </select>
+            <div className="relative">
+              <Tag className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+              <select value={genreFilter} onChange={(e) => setGenreFilter(e.target.value)}
+                className="appearance-none pl-8 pr-8 py-2 text-sm rounded-md border border-border bg-background shadow-sm hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/40 transition-colors cursor-pointer">
+                {genres.map((g) => <option key={g}>{g}</option>)}
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            </div>
           </div>
           <div className="flex flex-col gap-1 min-w-[180px]">
             <label className="text-sm text-muted-foreground font-medium whitespace-nowrap">
@@ -221,196 +396,254 @@ export function WearManagePage({
         </Card>
 
         <Card className="overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-muted/40">
-                <tr className="border-b border-border">
-                  <th className="w-9 px-4 py-3">
-                    <input type="checkbox" checked={allSel} onChange={toggleAll} className="rounded accent-primary" />
-                  </th>
-                  {([
-                    { key: "title", label: "제목 / 저자", hide: "" },
-                    { key: "genre", label: "장르", hide: "hidden md:table-cell" },
-                    { key: "damage", label: "마모 수준", hide: "" },
-                    { key: "turnover", label: "연 대출률", hide: "hidden xl:table-cell" },
-                  ] as { key: keyof Book; label: string; hide: string }[]).map(({ key, label, hide }) => (
-                    <th key={key} onClick={() => toggleSort(key)}
-                      className={`px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none whitespace-nowrap ${hide}`}>
-                      <span className="flex items-center gap-1 whitespace-nowrap">{label}<SortIcon k={key} /></span>
+          {listLoading ? (
+            <div className="flex items-center justify-center gap-2 py-20 text-sm text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" /> 점검 완료 도서 목록을 불러오는 중…
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-muted/40">
+                  <tr className="border-b border-border">
+                    <th className="w-9 px-4 py-3">
+                      <input type="checkbox" checked={allSel} onChange={toggleAll} className="rounded accent-primary" />
                     </th>
-                  ))}
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">처리 상태</th>
-                  <th className="hidden lg:table-cell px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">분류 확정일</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">사서 결정</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((book) => {
-                  const isSel = selected.has(book.id);
-                  const done = book.status !== "대기";
-                  const isActive = panelBook?.id === book.id;
-                  const bAnnualHistory = BOOK_LOAN_HISTORY[book.id]
-                    ?? Array.from({ length: 10 }, (_, i) => ({ year: String(2015 + i), v: 1 }));
-                  const bMonthlyData = buildMonthlyLoanData(book, bAnnualHistory);
-                  const bReason = BOOK_DAMAGE_REASON[book.id] ?? `최근 대출률 ${book.turnover.toFixed(1)}회/년 · 마모 수준 ${book.damage}/5`;
-                  const bInsp = inspections[book.id];
+                    {([
+                      { key: "title", label: "제목 / 저자", hide: "" },
+                      { key: "genre", label: "장르", hide: "hidden md:table-cell" },
+                      { key: "damage", label: "마모 수준", hide: "" },
+                      { key: "turnover", label: "연 대출률", hide: "hidden xl:table-cell" },
+                    ] as { key: keyof Book; label: string; hide: string }[]).map(({ key, label, hide }) => (
+                      <th key={key} onClick={() => toggleSort(key)}
+                        className={`px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none whitespace-nowrap ${hide}`}>
+                        <span className="flex items-center gap-1 whitespace-nowrap">{label}<SortIcon k={key} /></span>
+                      </th>
+                    ))}
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">처리 상태</th>
+                    <th className="hidden lg:table-cell px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">분류 확정일</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">사서 결정</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((book) => {
+                    const isSel = selected.has(book.id);
+                    const done = book.status !== "대기";
+                    const isActive = panelBook?.id === book.id;
+                    const bAnnualHistory = BOOK_LOAN_HISTORY[book.id]
+                      ?? Array.from({ length: 10 }, (_, i) => ({ year: String(2015 + i), v: 1 }));
+                    const bMonthlyData = buildMonthlyLoanData(book, bAnnualHistory);
+                    const bReason = BOOK_DAMAGE_REASON[book.id] ?? `최근 대출률 ${book.turnover.toFixed(1)}회/년 · 마모 수준 ${book.damage}/5`;
 
-                  return (
-                    <>
-                      <tr key={`row-${book.id}`}
-                        onClick={() => setPanelBook(isActive ? null : book)}
-                        className={`border-b transition-colors cursor-pointer
+                    return (
+                      <>
+                        <tr key={`row-${book.id}`}
+                          onClick={() => setPanelBook(isActive ? null : book)}
+                          className={`border-b transition-colors cursor-pointer
                             ${isActive ? "" : "border-border"}
                             ${isActive ? "bg-blue-50" : ""}
                             ${!isActive && isSel ? "bg-slate-50" : ""}
                             ${!isActive && !isSel ? "hover:bg-muted/25" : ""}
                             ${done ? "opacity-70" : ""}`}
-                        style={isActive ? { borderBottom: "none", borderLeft: `2px solid ${NAV}` } : {}}>
-                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                          <input type="checkbox" checked={isSel} onChange={() => toggleSel(book.id)} className="rounded accent-primary" />
-                        </td>
-                        <td className="px-4 py-3 max-w-[230px]">
-                          <p className="text-sm font-medium text-foreground truncate">{book.title}</p>
-                          <p className="text-sm text-muted-foreground truncate">{book.author}</p>
-                        </td>
-                        <td className="hidden md:table-cell px-4 py-3 text-sm text-muted-foreground max-w-[100px] truncate">{book.genre}</td>
-                        <td className="px-4 py-3"><DamageTooltipCell book={book} /></td>
-                        <td className="hidden xl:table-cell px-4 py-3 text-sm text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{book.turnover.toFixed(1)}/yr</td>
-                        <td className="px-4 py-3">
-                          {book.status === "대기" ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded border text-xs font-medium text-muted-foreground border-border bg-muted/40 whitespace-nowrap">
-                              <Clock className="w-3 h-3 flex-shrink-0" /> 미결정
-                            </span>
-                          ) : book.status === "폐기승인" ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold text-white whitespace-nowrap" style={{ backgroundColor: RED }}>
-                              <Trash2 className="w-3 h-3 flex-shrink-0" /> 폐기 승인
-                            </span>
-                          ) : book.status === "이관승인" ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold text-white whitespace-nowrap" style={{ backgroundColor: PURPLE }}>
-                              <MoveRight className="w-3 h-3 flex-shrink-0" /> 이관 승인
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold text-white whitespace-nowrap" style={{ backgroundColor: "#4A4335" }}>
-                              <BookMarked className="w-3 h-3 flex-shrink-0" /> 보존 결정
-                            </span>
-                          )}
-                        </td>
-                        <td className="hidden lg:table-cell px-4 py-3 text-sm text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                          {book.status === "대기" ? <span className="text-muted-foreground/30">—</span> : "2026-07-17"}
-                        </td>
-                        <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-1">
-                            <button disabled={book.status === "폐기승인"} onClick={() => requestAction(book, "폐기승인")}
-                              className="flex items-center gap-1 px-2 py-1.5 rounded text-white text-xs font-medium hover:opacity-80 active:scale-95 disabled:opacity-25 disabled:cursor-not-allowed whitespace-nowrap"
-                              style={{ backgroundColor: RED }}><Trash2 className="w-3.5 h-3.5 flex-shrink-0" /><span className="hidden sm:inline">폐기</span></button>
-                            <button disabled={book.status === "이관승인"} onClick={() => requestAction(book, "이관승인")}
-                              className="flex items-center gap-1 px-2 py-1.5 rounded text-white text-xs font-medium hover:opacity-80 active:scale-95 disabled:opacity-25 disabled:cursor-not-allowed whitespace-nowrap"
-                              style={{ backgroundColor: PURPLE }}><MoveRight className="w-3.5 h-3.5 flex-shrink-0" /><span className="hidden sm:inline">이관</span></button>
-                            <button disabled={book.status === "보존결정"} onClick={() => requestAction(book, "보존결정")}
-                              className="flex items-center gap-1 px-2 py-1.5 rounded text-white text-xs font-medium hover:opacity-80 active:scale-95 disabled:opacity-25 disabled:cursor-not-allowed whitespace-nowrap"
-                              style={{ backgroundColor: "#4A4335" }}><BookMarked className="w-3.5 h-3.5 flex-shrink-0" /><span className="hidden sm:inline">보존</span></button>
-                          </div>
-                        </td>
-                      </tr>
-
-                      {isActive && (
-                        <tr key={`panel-${book.id}`} style={{ borderLeft: `2px solid ${NAV}` }}>
-                          <td colSpan={8} className="px-0 pb-0">
-                            <div className="px-4 py-4 border-b border-border" style={{ backgroundColor: withAlpha(NAV, 0.02) }}>
-                              <div className="flex items-center justify-between mb-3 gap-2">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: NAV }} />
-                                  <p className="text-sm font-semibold text-foreground truncate">{book.title}</p>
-                                  <span className="text-sm text-muted-foreground truncate">— {book.author}</span>
-                                  <span className="text-xs text-muted-foreground px-1.5 py-0.5 rounded border border-border bg-card flex-shrink-0" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{book.id}</span>
-                                </div>
-                                <button onClick={(e) => { e.stopPropagation(); setPanelBook(null); }}
-                                  className="p-1 rounded hover:bg-muted text-muted-foreground transition-colors flex-shrink-0">
-                                  <X className="w-4 h-4" />
-                                </button>
-                              </div>
-
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div className="bg-card rounded-md border border-border p-3 flex flex-col">
-                                  <p className="text-sm font-semibold text-foreground mb-2">최근 12개월 월별 대출 추이</p>
-                                  <div className="h-48 sm:h-56">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                      <LineChart data={bMonthlyData} margin={{ top: 4, right: 4, bottom: 2, left: -8 }}>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
-                                        <XAxis dataKey="month"
-                                          tick={{ fontSize: 10, fill: "#9CA3AF", fontFamily: "'JetBrains Mono', monospace" }}
-                                          axisLine={false} tickLine={false} />
-                                        <YAxis
-                                          tick={{ fontSize: 10, fill: "#9CA3AF", fontFamily: "'JetBrains Mono', monospace" }}
-                                          axisLine={false} tickLine={false}
-                                          domain={[0, "dataMax + 1"]} allowDecimals={false} />
-                                        <Tooltip
-                                          formatter={(v: number) => [`${v}건`, "월간 대출"]}
-                                          labelFormatter={(l) => l}
-                                          contentStyle={{ fontSize: 11, borderRadius: 4, border: "1px solid #E5E7EB", padding: "2px 8px" }}
-                                        />
-                                        <Line type="monotone" dataKey="v" stroke={NAV} strokeWidth={2}
-                                          dot={{ r: 3, fill: NAV, strokeWidth: 1.5, stroke: "#fff" }}
-                                          activeDot={{ r: 4.5, fill: NAV, strokeWidth: 0 }} />
-                                      </LineChart>
-                                    </ResponsiveContainer>
-                                  </div>
-                                </div>
-
-                                <div className="bg-card rounded-md border border-border p-3 flex flex-col">
-                                  <div className="flex items-center justify-between mb-2 gap-2">
-                                    <p className="text-sm font-semibold text-foreground">마모 판단 근거</p>
-                                    <button onClick={(e) => { e.stopPropagation(); setChecklistTarget(book); }}
-                                      className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded border transition-colors hover:bg-muted/40"
-                                      style={{ borderColor: withAlpha(NAV, 0.25), color: NAV }}>
-                                      <ClipboardEdit className="w-3.5 h-3.5" /> 점검리스트 수정
-                                    </button>
-                                  </div>
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <DamageDot level={book.damage} />
-                                  </div>
-                                  <p className="text-sm text-muted-foreground leading-relaxed mb-2">{bReason}</p>
-
-                                  {bInsp ? (
-                                    <div className="flex flex-col gap-1.5 pt-2 border-t border-border max-h-40 overflow-y-auto pr-1">
-                                      {INSP_ITEMS_FLAT.map(({ key, label }) => {
-                                        const val = bInsp[key];
-                                        return (
-                                          <div key={key} className="flex items-center justify-between gap-2">
-                                            <span className="text-xs text-muted-foreground flex-1 min-w-0 truncate">{label}</span>
-                                            <span className="text-xs font-semibold flex-shrink-0" style={{ color: getDotColor(val) }}>{val}/5</span>
-                                          </div>
-                                        );
-                                      })}
-                                      <div className="flex items-center justify-between pt-1.5 mt-0.5 border-t border-border">
-                                        <span className="text-xs text-muted-foreground truncate">
-                                          15문항 평균 · {bInsp.inspector} · <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{bInsp.date}</span>
-                                        </span>
-                                        <span className="text-xs font-bold flex-shrink-0 ml-1" style={{ color: NAV, fontFamily: "'JetBrains Mono', monospace" }}>
-                                          {averageScore(bInsp).toFixed(2)} / 5.00
-                                        </span>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <p className="text-sm text-muted-foreground italic pt-2 border-t border-border">세부 심사 데이터 없음</p>
-                                  )}
-                                </div>
-                              </div>
+                          style={isActive ? { borderBottom: "none", borderLeft: `2px solid ${NAV}` } : {}}>
+                          <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                            <input type="checkbox" checked={isSel} onChange={() => toggleSel(book.id)} className="rounded accent-primary" />
+                          </td>
+                          <td className="px-4 py-3 max-w-[230px]">
+                            <p className="text-sm font-medium text-foreground truncate">{book.title}</p>
+                            <p className="text-sm text-muted-foreground truncate">{book.author}</p>
+                          </td>
+                          <td className="hidden md:table-cell px-4 py-3 text-sm text-muted-foreground max-w-[100px] truncate">{book.genre}</td>
+                          <td className="px-4 py-3"><DamageTooltipCell book={book} /></td>
+                          <td className="hidden xl:table-cell px-4 py-3 text-sm text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{book.turnover.toFixed(1)}/yr</td>
+                          <td className="px-4 py-3">
+                            {book.status === "대기" ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded border text-xs font-medium text-muted-foreground border-border bg-muted/40 whitespace-nowrap">
+                                <Clock className="w-3 h-3 flex-shrink-0" /> 미결정
+                              </span>
+                            ) : book.status === "폐기승인" ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold text-white whitespace-nowrap" style={{ backgroundColor: RED }}>
+                                <Trash2 className="w-3 h-3 flex-shrink-0" /> 폐기 승인
+                              </span>
+                            ) : book.status === "이관승인" ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold text-white whitespace-nowrap" style={{ backgroundColor: PURPLE }}>
+                                <MoveRight className="w-3 h-3 flex-shrink-0" /> 이관 승인
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold text-white whitespace-nowrap" style={{ backgroundColor: "#4A4335" }}>
+                                <BookMarked className="w-3 h-3 flex-shrink-0" /> 보존 결정
+                              </span>
+                            )}
+                          </td>
+                          <td className="hidden lg:table-cell px-4 py-3 text-sm text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                            {book.status === "대기" ? <span className="text-muted-foreground/30">—</span> : "2026-07-17"}
+                          </td>
+                          <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-1">
+                              <button disabled={book.status === "폐기승인"} onClick={() => requestAction(book, "폐기승인")}
+                                className="flex items-center gap-1 px-2 py-1.5 rounded text-white text-xs font-medium hover:opacity-80 active:scale-95 disabled:opacity-25 disabled:cursor-not-allowed whitespace-nowrap"
+                                style={{ backgroundColor: RED }}><Trash2 className="w-3.5 h-3.5 flex-shrink-0" /><span className="hidden sm:inline">폐기</span></button>
+                              <button disabled={book.status === "이관승인"} onClick={() => requestAction(book, "이관승인")}
+                                className="flex items-center gap-1 px-2 py-1.5 rounded text-white text-xs font-medium hover:opacity-80 active:scale-95 disabled:opacity-25 disabled:cursor-not-allowed whitespace-nowrap"
+                                style={{ backgroundColor: PURPLE }}><MoveRight className="w-3.5 h-3.5 flex-shrink-0" /><span className="hidden sm:inline">이관</span></button>
+                              <button disabled={book.status === "보존결정"} onClick={() => requestAction(book, "보존결정")}
+                                className="flex items-center gap-1 px-2 py-1.5 rounded text-white text-xs font-medium hover:opacity-80 active:scale-95 disabled:opacity-25 disabled:cursor-not-allowed whitespace-nowrap"
+                                style={{ backgroundColor: "#4A4335" }}><BookMarked className="w-3.5 h-3.5 flex-shrink-0" /><span className="hidden sm:inline">보존</span></button>
                             </div>
                           </td>
                         </tr>
-                      )}
-                    </>
-                  );
-                })}
-                {filtered.length === 0 && (
-                  <tr><td colSpan={8} className="py-16 text-center text-sm text-muted-foreground">조건에 해당하는 도서가 없습니다.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+
+                        {isActive && (
+                          <tr key={`panel-${book.id}`} style={{ borderLeft: `2px solid ${NAV}` }}>
+                            <td colSpan={8} className="px-0 pb-0">
+                              <div className="px-4 py-4 border-b border-border" style={{ backgroundColor: withAlpha(NAV, 0.02) }}>
+                                <div className="flex items-center justify-between mb-3 gap-2">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: NAV }} />
+                                    <p className="text-sm font-semibold text-foreground truncate">{book.title}</p>
+                                    <span className="text-sm text-muted-foreground truncate">— {book.author}</span>
+                                    <span className="text-xs text-muted-foreground px-1.5 py-0.5 rounded border border-border bg-card flex-shrink-0" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{book.id}</span>
+                                  </div>
+                                  <button onClick={(e) => { e.stopPropagation(); setPanelBook(null); }}
+                                    className="p-1 rounded hover:bg-muted text-muted-foreground transition-colors flex-shrink-0">
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  <div className="bg-card rounded-md border border-border p-3 flex flex-col">
+                                    <p className="text-sm font-semibold text-foreground mb-2">최근 12개월 월별 대출 추이</p>
+                                    <div className="h-48 sm:h-56">
+                                      <ResponsiveContainer width="100%" height="100%">
+                                        <LineChart data={bMonthlyData} margin={{ top: 4, right: 4, bottom: 2, left: -8 }}>
+                                          <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
+                                          <XAxis dataKey="month"
+                                            tick={{ fontSize: 10, fill: "#9CA3AF", fontFamily: "'JetBrains Mono', monospace" }}
+                                            axisLine={false} tickLine={false} />
+                                          <YAxis
+                                            tick={{ fontSize: 10, fill: "#9CA3AF", fontFamily: "'JetBrains Mono', monospace" }}
+                                            axisLine={false} tickLine={false}
+                                            domain={[0, "dataMax + 1"]} allowDecimals={false} />
+                                          <Tooltip
+                                            formatter={(v: number) => [`${v}건`, "월간 대출"]}
+                                            labelFormatter={(l) => l}
+                                            contentStyle={{ fontSize: 11, borderRadius: 4, border: "1px solid #E5E7EB", padding: "2px 8px" }}
+                                          />
+                                          <Line type="monotone" dataKey="v" stroke={NAV} strokeWidth={2}
+                                            dot={{ r: 3, fill: NAV, strokeWidth: 1.5, stroke: "#fff" }}
+                                            activeDot={{ r: 4.5, fill: NAV, strokeWidth: 0 }} />
+                                        </LineChart>
+                                      </ResponsiveContainer>
+                                    </div>
+                                  </div>
+
+                                  <div className="bg-card rounded-md border border-border p-3 flex flex-col">
+                                    <div className="flex items-center justify-between mb-2 gap-2">
+                                      <p className="text-sm font-semibold text-foreground">마모 판단 근거</p>
+                                      <button onClick={(e) => { e.stopPropagation(); setChecklistTarget(book); }}
+                                        className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded border transition-colors hover:bg-muted/40"
+                                        style={{ borderColor: withAlpha(NAV, 0.25), color: NAV }}>
+                                        <ClipboardEdit className="w-3.5 h-3.5" /> 점검리스트 수정
+                                      </button>
+                                    </div>
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <DamageDot level={book.damage} />
+                                    </div>
+                                    <p className="text-sm text-muted-foreground leading-relaxed mb-2">{bReason}</p>
+
+                                    {/* API(3번, 상세 조회) 기반 렌더링 — 로딩/에러/데이터 순으로 표시 */}
+                                    {detailLoading ? (
+                                      <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2 border-t border-border">
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> 점검 상세 불러오는 중…
+                                      </div>
+                                    ) : detailError ? (
+                                      <p className="text-sm pt-2 border-t border-border" style={{ color: RED }}>{detailError}</p>
+                                    ) : bookDetail ? (
+                                      <div className="flex flex-col gap-1.5 pt-2 border-t border-border max-h-40 overflow-y-auto pr-1">
+                                        {bookDetail.checkResults.map((r) => (
+                                          <div key={r.checkItemId} className="flex items-center justify-between gap-2">
+                                            <span className="text-xs text-muted-foreground flex-1 min-w-0 truncate">
+                                              {r.title}{r.note ? ` · ${r.note}` : ""}
+                                            </span>
+                                            <span className="text-xs font-semibold flex-shrink-0" style={{ color: r.isPassed ? GREEN : RED }}>
+                                              {r.isPassed ? "이상없음" : `감점 ${r.itemScore}`}
+                                            </span>
+                                          </div>
+                                        ))}
+                                        <div className="flex items-center justify-between pt-1.5 mt-0.5 border-t border-border">
+                                          <span className="text-xs text-muted-foreground truncate">
+                                            담당 {bookDetail.librarianCode} · <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{bookDetail.checkedDate}</span>
+                                          </span>
+                                          <span className="text-xs font-bold flex-shrink-0 ml-1" style={{ color: NAV, fontFamily: "'JetBrains Mono', monospace" }}>
+                                            총점 {bookDetail.totalScore}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <p className="text-sm text-muted-foreground italic pt-2 border-t border-border">세부 심사 데이터 없음</p>
+                                    )}
+
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); toggleHistory(book.id); }}
+                                      className="flex items-center gap-1 text-xs font-medium mt-3 pt-2 border-t border-border transition-colors hover:opacity-70"
+                                      style={{ color: NAV }}>
+                                      <History className="w-3.5 h-3.5" />
+                                      {historyOpen ? "전체 이력 접기" : "전체 점검 이력 보기"}
+                                      {historyOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                    </button>
+
+                                    {historyOpen && (
+                                      <div className="mt-2 flex flex-col gap-1.5 max-h-40 overflow-y-auto pr-1">
+                                        {historyLoading ? (
+                                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin" /> 이력 불러오는 중…
+                                          </div>
+                                        ) : historyError ? (
+                                          <p className="text-xs" style={{ color: RED }}>{historyError}</p>
+                                        ) : historyEntries.length === 0 ? (
+                                          <p className="text-xs text-muted-foreground italic">이전 점검 이력이 없습니다.</p>
+                                        ) : (
+                                          historyEntries.map((entry) => {
+                                            const failCount = entry.items.filter((i) => !i.isPassed).length;
+                                            return (
+                                              <div key={entry.resultBatchId}
+                                                className="flex items-center justify-between gap-2 px-2 py-1.5 rounded border border-border bg-muted/20">
+                                                <div className="flex flex-col min-w-0">
+                                                  <span className="text-xs text-foreground font-medium" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                                                    {entry.checkedDate}
+                                                  </span>
+                                                  <span className="text-xs text-muted-foreground truncate">
+                                                    담당 {entry.librarianCode} · 이상항목 {failCount}건
+                                                  </span>
+                                                </div>
+                                                <span className="text-xs font-bold flex-shrink-0" style={{ color: NAV, fontFamily: "'JetBrains Mono', monospace" }}>
+                                                  {entry.totalScore}점
+                                                </span>
+                                              </div>
+                                            );
+                                          })
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    );
+                  })}
+                  {filtered.length === 0 && (
+                    <tr><td colSpan={8} className="py-16 text-center text-sm text-muted-foreground">조건에 해당하는 도서가 없습니다.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
           <div className="px-4 py-3 border-t border-border bg-muted/20 flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">{filtered.length}건 표시 중</span>
+            <span className="text-sm text-muted-foreground">
+              {filtered.length}건 표시 중{saving ? " · 저장 중…" : ""}
+            </span>
             <div className="flex gap-1">
               {[1, 2, 3, "…", 6].map((p, i) => (
                 <button key={i} className={`w-8 h-8 text-sm rounded border font-medium transition-colors

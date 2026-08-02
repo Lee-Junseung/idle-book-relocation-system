@@ -1,5 +1,6 @@
 // hex 컬러 + 투명도 문자열 연결(`color + "18"` 등)과 DOT_COLORS/DOT_LABELS 인덱싱 시 범위 체크 누락을 공통으로 해결하기 위한 유틸
 import { DOT_COLORS, DOT_LABELS } from "../constants/colors";
+import { clampToScore } from "../constants/checklistItems";
 
 // DOT_COLORS[0] === "" (미평가/값 없음 상태)이거나 배열 범위를 벗어난 인덱스일 때 쓰는 중립색
 const NEUTRAL_COLOR = "#9CA3AF";
@@ -20,10 +21,9 @@ export function clampIndex(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Math.round(value)));
 }
 
-// 평균 점수처럼 항상 1~5 범위가 보장되는 값을 표시용으로 반올림함 (예: 15문항 평균 점수).
-// 0을 "미평가"로 다루는 개별 항목 점수(level)에는 사용하지 말 것 — getDotColor/getDotLabel을 쓸 것.
+// constants/checklistItems.ts의 clampToScore와 동일 로직 — 중복 제거를 위해 그쪽을 단일 소스로 재사용.
 export function clampScore(value: number): number {
-  return clampIndex(value, 1, 5);
+  return clampToScore(value);
 }
 
 // 손상도/점수에 해당하는 색상을 안전하게 조회함.

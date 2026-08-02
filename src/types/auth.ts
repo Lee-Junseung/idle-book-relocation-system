@@ -10,6 +10,8 @@ export interface LoginResponse {
     name: string;
     email: string;
     nickname: string;
+    librarianCode: string; // 점검 리스트 등록 API(ChecklistRegisterRequest.librarianCode)에 그대로 사용됨
+    accessToken: string; // 이후 모든 API 요청의 Authorization 헤더에 사용됨 (api/client.ts 참고)
 }
 
 // 회원가입 요청

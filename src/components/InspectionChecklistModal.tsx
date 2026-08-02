@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { X, ClipboardList, Save } from "lucide-react";
 import { NAV } from "../constants/colors";
 import { Book, DamageInspection, ScoreValue } from "../types";
-import { INSP_GROUPS, averageScore } from "../data/damageInspections";
+import { INSP_GROUPS, averageScore } from "../constants/checklistItems";
 import { clampScore, getDotColor, getDotLabel, withAlpha } from "./lib";
 
 type Scores = Omit<DamageInspection, "inspector" | "date">;

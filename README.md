@@ -4,10 +4,13 @@
 
 ## 폴더 구조
 
-\```
+```
 src/
 ├── api/                        # 백엔드 API 연동 레이어
-│   ├── client.ts                # 공통 fetch 래퍼, USE_MOCK 플래그
+│   ├── client.ts                # 공통 fetch 래퍼, USE_MOCK 플래그, Authorization 헤더 자동 첨부, 401 처리
+│   ├── auth.ts                   # 로그인/회원가입 API 함수 (mock/실제 API 분기)
+│   ├── authMock.ts               # 로그인/회원가입 mock 로직 (테스트 계정: admin/admin)
+│   ├── session.ts                # 로그인 세션(accessToken 포함) 저장/조회/삭제 (localStorage)
 │   ├── dashboard.ts              # 대시보드 API 함수 (mock/실제 API 분기)
 │   └── dashboardMock.ts          # 대시보드 mock 데이터 (data/ 재사용)
 │
@@ -20,31 +23,20 @@ src/
 │   ├── DemandTag.tsx
 │   ├── index.ts                  # 컴포넌트 export 모음
 │   ├── InspectionChecklistModal.tsx
-│   ├── lib.ts                    # 컴포넌트 공용 유틸 함수
+│   ├── lib.ts                    # 컴포넌트 공용 유틸 함수 (withAlpha, getDotColor 등)
 │   ├── MetricCard.tsx
 │   ├── ScoreDots.tsx
 │   ├── ScoreStackBar.tsx
 │   └── SectionHeader.tsx
 │
 ├── constants/
-│   └── colors.ts                 # 색상 상수 (NAV, BLUE, RED 등)
-│
-├── data/                        # Mock 데이터 (API 연동 전 임시 데이터)
-│   ├── auth.ts                    # 로그인/회원가입/계정찾기 mock 로직
-│   ├── bookDetails.ts              # 도서 상세 정보 mock
-│   ├── books.ts                    # 도서 목록 mock
-│   ├── branches.ts                 # 분관 네트워크 mock
-│   ├── damageInspections.ts         # 파손 심사 mock
-│   ├── index.ts                    # data 모듈 export 모음
-│   ├── loanTrend.ts                # 월별 대출 추이 mock
-│   ├── relocationQueue.ts           # 이관 검토 대기열 mock
-│   ├── seed.ts                     # 초기 시드 데이터
-│   └── wearUtils.ts                # 마모도 계산 유틸
+│   ├── colors.ts                 # 색상 상수 (NAV, BLUE, RED 등)
+│   └── library.ts                 # 현재 배포 도서관 정보(CURRENT_LIBRARY). .env의 VITE_LIBRARY_* 값을 주입받음
 │
 ├── pages/                       # 화면 단위 페이지 컴포넌트
 │   ├── index.ts                    # pages 모듈 export 모음
-│   ├── LoginPage.tsx               # 로그인/회원가입/계정찾기
-│   ├── OverviewPage.tsx            # 대시보드 전체 현황
+│   ├── LoginPage.tsx               # 로그인/회원가입 (아이디·비밀번호 찾기는 UI만 존재, 미구현)
+│   ├── OverviewPage.tsx            # 대시보드 전체 현황 (핵심 지표 · 월별 대출 추이 · 연령대 분포 · 분관 네트워크)
 │   ├── RelocationPage.tsx          # 이관 관리
 │   ├── WearManagePage.tsx          # 파손 도서 관리
 │   └── WearQueuePage.tsx           # 파손 심사 대기열
@@ -56,61 +48,78 @@ src/
 │   └── theme.css
 │
 ├── types/                       # 전역 타입 정의
-│   ├── dashboard.ts                # 대시보드 API 응답 타입
+│   ├── auth.ts                     # 로그인/회원가입 요청·응답 타입 (LoginResponse에 accessToken 포함)
+│   ├── dashboard.ts                # 대시보드 API 응답 타입 (OverviewPage에서 사용)
 │   └── index.ts                    # 공용 타입 (Session, User 등)
 │
-├── App.tsx                    # 루트 컴포넌트, 라우팅/레이아웃 진입점
+├── App.tsx                    # 루트 컴포넌트, 라우팅/레이아웃 진입점, 401 콜백 등록
 ├── main.tsx                   # 앱 엔트리 포인트 (ReactDOM 렌더링)
 └── vite-env.d.ts               # Vite 환경변수 타입 선언
-\```
+```
 
 ### 폴더별 역할
 
-- **`api/`**: 실제 백엔드 API 호출과 mock 데이터를 분기하는 레이어. `.env.local`의 `VITE_USE_MOCK` 값에 따라 자동 전환됨.
+- **`api/`**: 실제 백엔드 API 호출과 mock 데이터를 분기하는 레이어. `.env.local`의 `VITE_USE_MOCK` 값에 따라 자동 전환됨. 로그인 성공 후 발급되는 `accessToken`도 이 레이어(`client.ts`)에서 모든 요청에 자동으로 실어 보낸다. (로그인/회원가입: mock `api/authMock.ts`, 대시보드: mock `api/dashboardMock.ts`)
 - **`components/`**: 여러 페이지에서 공유하는 프레젠테이션 컴포넌트.
+- **`constants/`**: 배포 환경(도서관 정보)과 디자인 토큰(색상) 등 앱 전역 상수.
 - **`data/`**: 백엔드 연동 전 화면 개발용 mock 데이터. API 연동이 끝난 페이지는 이 폴더를 직접 참조하지 않고 `api/` 레이어를 거침.
 - **`pages/`**: 라우트 단위 화면. 데이터 페칭 로직(`useEffect` + `api/` 함수 호출)과 UI 렌더링을 담당.
-- **`types/`**: API 응답 및 도메인 모델 타입 정의. 페이지별로 파일을 분리 (예: `dashboard.ts`).
+- **`types/`**: API 응답 및 도메인 모델 타입 정의. 페이지별로 파일을 분리 (예: `auth.ts`, `dashboard.ts`).
 
-## 환경변수 설정 (`.env.local`)
+## 환경변수 설정
 
-\```dotenv
+```.env
+# .env — 배포 인스턴스(도서관)를 식별하는 정보. 도서관마다 별도 배포하는 구조라 도서관을 바꾸려면
+# 코드가 아니라 이 값만 바꾸면 된다. (constants/library.ts에서 필수값으로 검증함 — 누락 시 앱 부팅 실패)
+VITE_LIBRARY_ID=lib-buksuwon-001
+VITE_LIBRARY_NAME=북수원도서관
+VITE_LIBRARY_ADDRESS=경기도 수원시 장안구 정조로 944
+VITE_LIBRARY_SHORT_ADDRESS=경기도 수원시 장안구
+```
+
+```.env
+# .env.local — API 통신 모드
 # true로 설정하면 Mock 데이터 사용, false로 바꾸면 실제 API 호출
 VITE_USE_MOCK=true
 VITE_API_BASE_URL=http://localhost:8080
-\```
+```
+
+## 인증(Auth) 흐름 — LoginPage
+
+1. 사용자가 `LoginPage`에서 아이디/비밀번호를 입력하고 제출하면 `api/auth.ts`의 `loginApi`가 호출됨.
+2. `VITE_USE_MOCK` 값에 따라 `api/authMock.ts`(mock) 또는 `POST /api/users/login`(실제 API) 중 하나로 분기.
+3. 로그인 성공 응답(`message, name, email, nickname, librarianCode, accessToken`)을 받으면 `LoginPage`가 이를 `Session` 객체로 조립해 `api/session.ts`의 `saveSession`으로 `localStorage`에 저장.
+   - `librarianId`(응답의 `librarianCode`)는 점검 결과 등록 API(`ChecklistRegisterRequest.librarianCode`)에 그대로 사용됨.
+   - `accessToken`은 이후 모든 API 요청에 사용됨.
+4. 저장된 세션은 `App.tsx`가 앱 시작 시 `loadSession()`으로 읽어와 로그인 상태를 유지 (새로고침해도 재로그인 불필요).
+5. `api/client.ts`의 `apiGet`/`apiPost`는 요청마다 `loadSession()`으로 `accessToken`을 꺼내 `Authorization: Bearer <token>` 헤더를 자동으로 첨부함. 별도로 각 API 함수에서 토큰을 신경 쓸 필요 없음.
+6. **401 응답을 받으면 자동으로 로그아웃 처리됨.** `client.ts`가 응답 상태코드 401을 감지하면 `session.ts`의 `logout()`(localStorage 세션 삭제)을 호출하고, `App.tsx`가 등록해둔 콜백(`setUnauthorizedHandler`)을 실행해 화면 상태의 `session`도 `null`로 초기화 — 결과적으로 어느 페이지에서 API 호출 중 401을 받아도 자동으로 로그인 화면으로 돌아감.
+7. 로그아웃 버튼(`App.tsx` 사이드바)을 직접 눌러도 동일하게 `logout()` + `setSession(null)` 처리.
+
+### 알려진 제약
+
+- 아이디/비밀번호 찾기: 로그인 폼에 텍스트(UI)만 있고 실제 기능은 미구현.
+- 토큰 갱신(refresh) 플로우 없음: `accessToken` 만료 시 재로그인만 가능 (백엔드 응답에 `refreshToken` 필드가 없음).
 
 ---
 
-# React + TypeScript + Vite
+## 대시보드 흐름 — OverviewPage
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+사이드바 "개요" 메뉴에 해당하는 첫 화면. **핵심 지표 4종 + 월별 대출 추이 차트 + 지역 연령대 분포 + 수원시 도서관 네트워크 목록**을 한 화면에서 보여준다.
 
-Currently, two official plugins are available:
+### 데이터 페칭 흐름
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+1. `OverviewPage` 마운트 시 `useEffect`에서 `loadDashboard()` 실행.
+2. `Promise.all`로 6개 API를 **병렬 호출**:
+   `getIdleBooksCount(libraryId)` · `getDamagePendingCount(libraryId)` · `getTransferPendingCount()` · `getMonthlyLoans()` · `getUsersDistribution()` · `getLibraryNetworkDistances()` — 전부 `src/api/dashboard.ts`에 정의.
+3. `VITE_USE_MOCK` 값에 따라 각 함수가 `api/client.ts`의 `apiGet`(실제 API) 또는 `api/dashboardMock.ts`(mock)로 분기 — Auth와 동일한 패턴.
+4. 응답을 화면용 로컬 타입(`LoanTrendPoint`, `DemographicPoint`, `Branch` 등)으로 가공한 뒤 `setState`.
+5. 언마운트 시 `cancelled` 플래그로 이후 `setState` 호출을 막아 레이스 컨디션을 방지.
+6. 실패 시 `ApiError`와 일반 `Error`를 구분해 `DashboardErrorState`로 정규화하고 에러 화면을 렌더링 (전체 페이지 단위 로딩/에러 처리이며, 부분 실패 시에도 화면 전체가 에러로 대체됨).
 
-## React Compiler
+### 알려진 확인 포인트
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
-
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+- [x] ~~`loans/monthly`의 `date` 파라미터~~ → **백엔드 확인 완료 (롤링 방식).** 현재 코드는 요청 시 `date`(또는 다른 어떤) 쿼리 파라미터도 보내지 않으며, 이대로 유지하면 됨. 파라미터 없이 호출하면 백엔드가 **오늘 기준 최근 12개월**(고정 연도가 아닌 rolling 12개월)을 자동으로 채워 응답. 명세서 응답 예시의 3개월치는 문서 지면상 일부만 보여준 예시일 뿐 실제 개수 제한이 아니었음. 명세서에 있는 `date` 400 에러는 향후 기간 필터 옵션을 위한 것으로 보이며, 현재 대시보드 화면엔 해당 필터 UI가 없어 사용하지 않음. **코드·명세서 모두 수정 불필요.**
+- `usersDistribution.data.ageDistribution` 접근 시 옵셔널 체이닝/기본값이 없으나, 명세서 예시에 7개 키가 모두 있어 정상 케이스는 문제없음. 다만 안전장치로 방어 코드를 추가하면 더 견고해짐 (우선순위 낮음).
+- `Promise.all` 특성상 6개 API 중 하나만 실패해도 전체가 에러 화면으로 대체됨. 재시도(refetch) 버튼은 없음 (우선순위 낮음, UX 개선 사항).
+- `dashboardMock.ts`의 `MOCK_DATA_BY_LIBRARY`는 현재 `CURRENT_LIBRARY.id`(북수원도서관) 하나만 등록되어 있음. 새 도서관을 mock 모드로 개발할 때 항목을 추가하지 않으면 자동으로 북수원 데이터로 fallback됨 — 에러는 안 나지만 헷갈릴 수 있으므로 **두 번째 도서관을 mock 모드로 개발할 때만 기억하면 되는 항목** (우선순위 낮음, 지금 당장 손댈 필요 없음).

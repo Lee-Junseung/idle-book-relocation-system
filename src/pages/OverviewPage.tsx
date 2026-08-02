@@ -334,7 +334,7 @@ export function OverviewPage() {
                   {demographicsData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} stroke="none" />)}
                 </Pie>
                 <Tooltip
-                  formatter={(v: number) => v != null ? `${v.toLocaleString()}명` : ""}
+                  formatter={(v) => typeof v === "number" ? `${v.toLocaleString()}명` : ""}
                   contentStyle={{ fontSize: 11, borderRadius: 4, border: "1px solid #E5E7EB" }}
                 />
               </PieChart>

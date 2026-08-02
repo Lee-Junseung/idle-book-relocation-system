@@ -9,6 +9,7 @@ import { withAlpha } from "../components";
 import { NAV, GREEN, RED } from "../constants/colors";
 import { loginApi, registerApi } from "../api/auth";
 import { ApiError } from "../api/client";
+import { saveSession } from "../api/session";
 import { Session } from "../types";
 
 const MONO = "'JetBrains Mono', monospace";
@@ -80,7 +81,10 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
         name: res.name,
         email: res.email,
         nickname: res.nickname,
+        librarianId: res.librarianCode,
+        accessToken: res.accessToken,
       };
+      saveSession(session);
       onLogin(session);
     } catch (err) {
       if (err instanceof ApiError) {

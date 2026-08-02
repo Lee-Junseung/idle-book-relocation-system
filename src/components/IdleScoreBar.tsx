@@ -24,8 +24,10 @@ export function IdleScoreBar({ book }: { book: Book }) {
     const {
         score,
         ageYears,
+        ageApprox,
         ageContribution,
         loanRate,
+        loanApprox,
         loanContribution,
         isDecayFiltered,
     } = computeIdleScore(book);
@@ -68,8 +70,16 @@ export function IdleScoreBar({ book }: { book: Book }) {
     }, [tooltipPos]);
 
     const rows = [
-        { label: "정보 노후도", weight: "Wage(KDC)", raw: `${ageYears}년`, contrib: `+${ageContribution}`, color: AMBER, bar: ageContribution },
-        { label: "대출 저조도", weight: "Wloan(KDC)", raw: `${loanRate.toFixed(1)}건/년`, contrib: `+${loanContribution}`, color: BROWN, bar: loanContribution },
+        {
+            label: "정보 노후도", weight: "Wage(KDC)",
+            raw: ageApprox ? "10년+" : `${ageYears}년`,
+            contrib: `+${ageContribution}`, color: AMBER, bar: ageContribution,
+        },
+        {
+            label: "대출 저조도", weight: "Wloan(KDC)",
+            raw: loanApprox ? "2.0+건/년" : `${loanRate.toFixed(1)}건/년`,
+            contrib: `+${loanContribution}`, color: BROWN, bar: loanContribution,
+        },
     ];
 
     return (
