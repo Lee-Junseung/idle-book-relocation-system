@@ -7,7 +7,8 @@
 ```
 src/
 ├── api/                        # 백엔드 API 연동 레이어
-│   ├── client.ts                # 공통 fetch 래퍼, USE_MOCK 플래그, Authorization 헤더 자동 첨부, 401 처리
+│   ├── client.ts                # 공통 fetch 래퍼, USE_MOCK 플래그, Authorization 헤더 자동 첨부, 401 처리,
+│   │                             # 로그인 응답 헤더(Authorization)에서 accessToken을 추출하는 apiPostWithAuthHeader
 │   ├── auth.ts                   # 로그인/회원가입 API 함수 (mock/실제 API 분기)
 │   ├── authMock.ts               # 로그인/회원가입 mock 로직 (테스트 계정: admin/admin)
 │   ├── session.ts                # 로그인 세션(accessToken 포함) 저장/조회/삭제 (localStorage)
@@ -48,7 +49,10 @@ src/
 │   └── theme.css
 │
 ├── types/                       # 전역 타입 정의
-│   ├── auth.ts                     # 로그인/회원가입 요청·응답 타입 (LoginResponse에 accessToken 포함)
+│   ├── auth.ts                     # 로그인/회원가입 요청·응답 타입.
+│   │                                 # LoginRequest는 { username, password } (프론트 상태명은 loginId이지만 전송 시 username 필드로 매핑됨).
+│   │                                 # LoginResponse는 서버 응답 바디(LoginResponseBody: message/name/email/nickname/librarianCode)에
+│   │                                 # accessToken을 합친 형태 — accessToken은 응답 바디가 아니라 Authorization 응답 헤더(Bearer ...)에서 추출됨 (api/client.ts, api/auth.ts 참고)
 │   ├── dashboard.ts                # 대시보드 API 응답 타입 (OverviewPage에서 사용)
 │   └── index.ts                    # 공용 타입 (Session, User 등)
 │
@@ -86,20 +90,21 @@ VITE_API_BASE_URL=http://localhost:8080
 
 ## 인증(Auth) 흐름 — LoginPage
 
-1. 사용자가 `LoginPage`에서 아이디/비밀번호를 입력하고 제출하면 `api/auth.ts`의 `loginApi`가 호출됨.
+1. 사용자가 `LoginPage`에서 아이디/비밀번호를 입력하고 제출하면 `api/auth.ts`의 `loginApi`가 호출됨. 이때 요청 바디는 `{ username, password }` — 프론트 화면 상의 "아이디" 입력값(`loginId`)이 서버로는 `username` 필드명으로 전송됨.
 2. `VITE_USE_MOCK` 값에 따라 `api/authMock.ts`(mock) 또는 `POST /api/users/login`(실제 API) 중 하나로 분기.
-3. 로그인 성공 응답(`message, name, email, nickname, librarianCode, accessToken`)을 받으면 `LoginPage`가 이를 `Session` 객체로 조립해 `api/session.ts`의 `saveSession`으로 `localStorage`에 저장.
+3. 로그인 성공 시 서버는 응답 **바디**에 `message, name, email, nickname, librarianCode`를 담아 보내고, **`accessToken`은 응답 바디가 아니라 `Authorization` 응답 헤더(`Bearer ...`)로 내려줌.** `api/client.ts`의 `apiPostWithAuthHeader()`가 이 헤더에서 토큰을 추출하고, `api/auth.ts`의 `loginApi()`가 응답 바디와 토큰을 합쳐 하나의 `LoginResponse` 객체로 반환하므로 `LoginPage` 입장에서는 `res.accessToken`을 그대로 쓰면 됨.
+4. `LoginPage`가 이 `LoginResponse`를 `Session` 객체로 조립해 `api/session.ts`의 `saveSession`으로 `localStorage`에 저장.
    - `librarianId`(응답의 `librarianCode`)는 점검 결과 등록 API(`ChecklistRegisterRequest.librarianCode`)에 그대로 사용됨.
    - `accessToken`은 이후 모든 API 요청에 사용됨.
-4. 저장된 세션은 `App.tsx`가 앱 시작 시 `loadSession()`으로 읽어와 로그인 상태를 유지 (새로고침해도 재로그인 불필요).
-5. `api/client.ts`의 `apiGet`/`apiPost`는 요청마다 `loadSession()`으로 `accessToken`을 꺼내 `Authorization: Bearer <token>` 헤더를 자동으로 첨부함. 별도로 각 API 함수에서 토큰을 신경 쓸 필요 없음.
-6. **401 응답을 받으면 자동으로 로그아웃 처리됨.** `client.ts`가 응답 상태코드 401을 감지하면 `session.ts`의 `logout()`(localStorage 세션 삭제)을 호출하고, `App.tsx`가 등록해둔 콜백(`setUnauthorizedHandler`)을 실행해 화면 상태의 `session`도 `null`로 초기화 — 결과적으로 어느 페이지에서 API 호출 중 401을 받아도 자동으로 로그인 화면으로 돌아감.
-7. 로그아웃 버튼(`App.tsx` 사이드바)을 직접 눌러도 동일하게 `logout()` + `setSession(null)` 처리.
+5. 저장된 세션은 `App.tsx`가 앱 시작 시 `loadSession()`으로 읽어와 로그인 상태를 유지 (새로고침해도 재로그인 불필요).
+6. `api/client.ts`의 `apiGet`/`apiPost`는 요청마다 `loadSession()`으로 `accessToken`을 꺼내 `Authorization: Bearer <token>` 헤더를 자동으로 첨부함. 별도로 각 API 함수에서 토큰을 신경 쓸 필요 없음.
+7. **401 응답을 받으면 자동으로 로그아웃 처리됨.** `client.ts`가 응답 상태코드 401을 감지하면 `session.ts`의 `logout()`(localStorage 세션 삭제)을 호출하고, `App.tsx`가 등록해둔 콜백(`setUnauthorizedHandler`)을 실행해 화면 상태의 `session`도 `null`로 초기화 — 결과적으로 어느 페이지에서 API 호출 중 401을 받아도 자동으로 로그인 화면으로 돌아감.
+8. 로그아웃 버튼(`App.tsx` 사이드바)을 직접 눌러도 동일하게 `logout()` + `setSession(null)` 처리.
 
-### 알려진 제약
+### 알려진 제약 / 확인 필요 항목
 
 - 아이디/비밀번호 찾기: 로그인 폼에 텍스트(UI)만 있고 실제 기능은 미구현.
-- 토큰 갱신(refresh) 플로우 없음: `accessToken` 만료 시 재로그인만 가능 (백엔드 응답에 `refreshToken` 필드가 없음).
+- 토큰 갱신(refresh) 플로우 없음: `accessToken` 만료 시 재로그인만 가능 (로그인 응답에 `refreshToken` 필드가 없음). 백엔드에 별도 refresh 엔드포인트가 있는지, `accessToken` 만료 시간이 얼마인지 확인 필요 — 있다면 자동 갱신 로직 추가 가능.
 
 ---
 
@@ -119,7 +124,6 @@ VITE_API_BASE_URL=http://localhost:8080
 
 ### 알려진 확인 포인트
 
-- [x] ~~`loans/monthly`의 `date` 파라미터~~ → **백엔드 확인 완료 (롤링 방식).** 현재 코드는 요청 시 `date`(또는 다른 어떤) 쿼리 파라미터도 보내지 않으며, 이대로 유지하면 됨. 파라미터 없이 호출하면 백엔드가 **오늘 기준 최근 12개월**(고정 연도가 아닌 rolling 12개월)을 자동으로 채워 응답. 명세서 응답 예시의 3개월치는 문서 지면상 일부만 보여준 예시일 뿐 실제 개수 제한이 아니었음. 명세서에 있는 `date` 400 에러는 향후 기간 필터 옵션을 위한 것으로 보이며, 현재 대시보드 화면엔 해당 필터 UI가 없어 사용하지 않음. **코드·명세서 모두 수정 불필요.**
-- `usersDistribution.data.ageDistribution` 접근 시 옵셔널 체이닝/기본값이 없으나, 명세서 예시에 7개 키가 모두 있어 정상 케이스는 문제없음. 다만 안전장치로 방어 코드를 추가하면 더 견고해짐 (우선순위 낮음).
+- `usersDistribution.data.ageDistribution` 접근 시 옵셔널 체이닝/기본값이 없으나, 명세서 예시에 7개 키가 모두 있어 정상 케이스는 문제없음. 다만 안전장치로 방어 코드를 추가하면 더 견고해짐. 방어 코드가 없는 상태로 백엔드를 신뢰하고 있음 (우선순위 낮음).
 - `Promise.all` 특성상 6개 API 중 하나만 실패해도 전체가 에러 화면으로 대체됨. 재시도(refetch) 버튼은 없음 (우선순위 낮음, UX 개선 사항).
 - `dashboardMock.ts`의 `MOCK_DATA_BY_LIBRARY`는 현재 `CURRENT_LIBRARY.id`(북수원도서관) 하나만 등록되어 있음. 새 도서관을 mock 모드로 개발할 때 항목을 추가하지 않으면 자동으로 북수원 데이터로 fallback됨 — 에러는 안 나지만 헷갈릴 수 있으므로 **두 번째 도서관을 mock 모드로 개발할 때만 기억하면 되는 항목** (우선순위 낮음, 지금 당장 손댈 필요 없음).

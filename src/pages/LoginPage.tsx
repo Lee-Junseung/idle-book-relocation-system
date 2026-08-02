@@ -70,7 +70,7 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
 
     setLoginLoading(true);
     try {
-      const res = await loginApi({ id: loginId.trim(), password: loginPw });
+      const res = await loginApi({ username: loginId.trim(), password: loginPw });
 
       try {
         if (rememberId) localStorage.setItem(REMEMBER_ID_KEY, loginId.trim());

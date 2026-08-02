@@ -84,7 +84,7 @@ export interface LibraryNetworkResponse {
 export interface ApiErrorBody {
     success: false;
     status: number;
-    message: string;
+    message?: string;
     error: string;
 }
 

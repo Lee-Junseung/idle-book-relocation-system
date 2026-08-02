@@ -34,8 +34,8 @@ export interface CompletedChecklistItem {
   title: string;
   author: string;
   publisher: string;
-  callNumber: string;
-  coverUrl: string;
+  callNumber: string | null; // ⚠️ 실제 응답에서 null로 내려오는 경우 확인됨 (Postman 캡처 기준)
+  coverUrl: string | null;   // ⚠️ 실제 응답에서 null로 내려오는 경우 확인됨 (Postman 캡처 기준)
   checkedDate: string; // "2026-08-01"
   librarianName: string;
   totalScore: number;
@@ -64,8 +64,8 @@ export interface BookInfo {
   title: string;
   author: string;
   publisher: string;
-  callNumber: string;
-  coverUrl: string;
+  callNumber: string | null; // ⚠️ 실제 응답에서 null로 내려오는 경우 확인됨 (Postman 캡처 기준)
+  coverUrl: string | null;   // ⚠️ 실제 응답에서 null로 내려오는 경우 확인됨 (Postman 캡처 기준)
   status: ApiBookStatus;
 }
 
@@ -118,6 +118,13 @@ export interface UpdateCheckResultInput {
 }
 
 export interface UpdateChecklistResultRequest {
+  // ⚠️ Postman 캡처(PUT /checklists/results/{id}) 기준으로 실제 요청에 포함되어 있던 필드입니다.
+  //    명세서 원문에 필수/선택 여부가 명시되어 있지 않아, 우선 캡처에서 확인된 값을 그대로 채워 보냅니다.
+  //    (bookId 불일치, totalScore 계산 기준 등은 README의 "백엔드 확인 필요" 항목 참고)
+  bookId: number;
+  librarianCode: string;
+  checkedDate: string; // "2026-08-02"
+  totalScore: number;
   checkResults: UpdateCheckResultInput[];
 }
 

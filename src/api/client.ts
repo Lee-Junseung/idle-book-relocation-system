@@ -2,12 +2,12 @@ import { loadSession, logout } from "./session";
 
 export const USE_MOCK = import.meta.env.VITE_USE_MOCK === "true";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
+export const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
 // 로그인 이후 저장된 세션에서 accessToken을 꺼내 Authorization 헤더로 만든다.
 // 세션이 없거나(로그인 전) accessToken이 없으면 빈 객체를 반환해 헤더를 붙이지 않는다.
 // (로그인/회원가입 요청 시점에는 세션이 없는 게 정상이므로 이 경우도 자연스럽게 처리됨)
-function authHeaders(): Record<string, string> {
+export function authHeaders(): Record<string, string> {
     const session = loadSession();
     return session?.accessToken ? { Authorization: `Bearer ${session.accessToken}` } : {};
 }
@@ -25,6 +25,11 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler | null) {
 function handleUnauthorized() {
     logout();
     unauthorizedHandler?.();
+}
+
+// checklistApi.ts처럼 apiGet/apiPost를 거치지 않고 자체 fetch 래퍼를 쓰는 도메인에서도 401 응답 시 동일하게 "세션 삭제 + 로그인 화면 복귀"를 트리거할 수 있도록 노출.
+export function notifyUnauthorized() {
+    handleUnauthorized();
 }
 
 // 서버가 내려주는 에러 응답(message/error/status 또는 statusCode)을 그대로 담아 던지는 에러.
@@ -95,6 +100,36 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
     }
 
     return json as T;
+}
+
+// 응답의 Authorization 헤더(예: "Bearer eyJ...")에서 토큰 값만 추출.
+// 헤더가 없거나 형식이 다르면 undefined를 반환한다.
+function extractBearerToken(res: Response): string | undefined {
+    const header = res.headers.get("Authorization");
+    if (!header) return undefined;
+    const match = header.match(/^Bearer\s+(.+)$/i);
+    return match ? match[1] : header;
+}
+
+// apiPost와 동일하게 동작하되, 응답 바디뿐 아니라 Authorization 응답 헤더에 담긴 토큰도 함께 반환한다.
+// 로그인 API(POST /api/users/login)처럼 accessToken을 응답 바디가 아닌 헤더로 내려주는 엔드포인트 전용.
+export async function apiPostWithAuthHeader<T>(path: string, body: unknown): Promise<{ data: T; accessToken?: string }> {
+    const res = await fetch(`${BASE_URL}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify(body),
+    });
+
+    const json = await res.json().catch(() => null);
+
+    if (!res.ok) {
+        const statusCode = extractStatus(json, res.status);
+        if (statusCode === 401) handleUnauthorized();
+        const message = extractMessage(json, path, res.status);
+        throw new ApiError(message, statusCode, extractError(json));
+    }
+
+    return { data: json as T, accessToken: extractBearerToken(res) };
 }
 
 // 개발 중 네트워크 지연을 흉내내고 싶을 때

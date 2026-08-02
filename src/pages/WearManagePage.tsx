@@ -1,19 +1,17 @@
 // 점검 리스트 등록이 완료된 도서를 필터/정렬하고, 폐기·이관·보존을 결정 확정하는 페이지
 //
 // [API 연동 메모]
-// - 목록(2번)/상세(3번) 조회는 실제 API로 대체했습니다.
-// - 이력 조회(4번) 함수는 api 클라이언트에 준비되어 있으나 이 화면에는 아직
-//   노출하지 않았습니다 (필요 시 getBookHistory 사용).
+// - 목록(2번)/상세(3번)/이력(4번)/수정(5번) 모두 실제 API로 연동되어 있습니다.
+//   (mock ↔ 실제 API 전환은 .env.local의 VITE_USE_MOCK 값으로 자동 처리됩니다 —
+//    api/checklistApi.ts 내부에서 분기하므로 이 파일의 import를 직접 바꿀 필요는 없습니다.)
+// - "전체 점검 이력 보기" 버튼으로 이력(4번)이 화면에 노출되어 있습니다.
 // - 폐기/이관/보존 "결정"을 서버에 확정 저장하는 API가 아직 없어서, 해당
 //   상태는 지금처럼 로컬 상태로만 관리됩니다.
 // - 목록 API가 genre/isbn/branch/turnover 를 내려주지 않아 임시값으로 채웁니다.
 //   (src/types/checklistApi.ts의 mapCompletedItemToBook 참고)
 // - 백엔드에 전역 예외 핸들러가 없어 없는 리소스 조회 시 500(비JSON)이 내려올
 //   수 있어, 프론트에서 이를 감지해 우호적인 메시지로 표시합니다.
-//
-// 로컬 개발 중 백엔드 없이 화면만 확인하려면 아래 import 한 줄만 바꾸면 됩니다.
 import * as checklistApi from "../api/checklistApi";
-// import * as checklistApi from "../api/checklistApi.mock";
 
 import { useState, useMemo, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
@@ -50,13 +48,16 @@ const STATUS_META: Record<
 };
 
 export function WearManagePage({
-  books, setBooks, inspections, setInspections, inspectorName,
+  books, setBooks, inspections, setInspections, inspectorName, librarianCode,
 }: {
   books: Book[];
   setBooks: React.Dispatch<React.SetStateAction<Book[]>>;
   inspections: Record<string, DamageInspection>;
   setInspections: React.Dispatch<React.SetStateAction<Record<string, DamageInspection>>>;
   inspectorName?: string;
+  // PUT /checklists/results/{resultBatchId} 요청에 실리는 사서 식별 코드 (세션의 librarianId).
+  // 화면에 표시되는 자유입력 "점검자명"(inspectorName/inspector)과는 별개 값입니다.
+  librarianCode?: string;
 }) {
   const branchFilter = CURRENT_LIBRARY.name;
   const genres = ["전체 장르", ...Array.from(new Set(books.map((b) => b.genre)))];
@@ -249,6 +250,10 @@ export function WearManagePage({
     const resultBatchId = resultBatchByBookId[targetId];
     // ⚠️ isPassed 판정 기준(몇 점 이하를 "통과"로 볼지)은 아직 정책이 확정되지
     // 않아 1점(양호)만 통과로 임시 처리합니다 — 기준 확정되면 교체 필요.
+    // ⚠️ itemScore를 화면 내부 1~5점 척도(insp[key])로 그대로 보내고 있는데,
+    // check-items 마스터(GET /checklists/check-items)에서 확인된 실제 maxScore는
+    // 항목별로 5/10 등으로 다릅니다. 항목별 만점 기준이 확정되면 스케일 변환이
+    // 필요합니다 — README "백엔드 확인 필요" 항목 참고.
     const checkResults: UpdateCheckResultInput[] = INSP_ITEMS_FLAT.map(({ key, checkItemId }) => {
       const value = insp[key] as unknown as number;
       return {
@@ -257,6 +262,9 @@ export function WearManagePage({
         itemScore: value,
       };
     });
+    // 백엔드 totalScore는 15개 항목 itemScore의 합으로 봅니다 (constants/checklistItems.ts의
+    // averageScore 주석 참고). 화면 표시용 1~5 마모도(avgRounded)와는 별개 값입니다.
+    const totalScoreForApi = checkResults.reduce((sum, r) => sum + r.itemScore, 0);
 
     if (!resultBatchId) {
       console.warn(
@@ -267,9 +275,30 @@ export function WearManagePage({
       return;
     }
 
+    // WearQueuePage와 동일하게, 사서 식별 코드가 없으면 "누가 수정했는지" 알 수 없는 상태로
+    // 서버에 저장 요청을 보내지 않도록 사전에 막습니다.
+    if (!librarianCode) {
+      setModal({
+        title: "저장 실패",
+        body: "사서 정보를 확인할 수 없습니다. 다시 로그인한 후 시도해 주세요.",
+        confirmLabel: "확인",
+        confirmColor: RED,
+        icon: "danger",
+        onConfirm: () => { },
+      });
+      setChecklistTarget(null);
+      return;
+    }
+
     setSaving(true);
     try {
-      await checklistApi.updateChecklistResult(resultBatchId, { checkResults });
+      await checklistApi.updateChecklistResult(resultBatchId, {
+        bookId: Number(targetId),
+        librarianCode,
+        checkedDate: insp.date,
+        totalScore: totalScoreForApi,
+        checkResults,
+      });
       // 상세 패널이 같은 도서를 보고 있다면 최신 상태로 갱신
       if (panelBook?.id === targetId) {
         const detail = await checklistApi.getBookDetail(Number(targetId));

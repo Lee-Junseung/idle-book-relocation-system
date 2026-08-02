@@ -24,8 +24,8 @@ const registeredEmails = new Set<string>([MOCK_ACCOUNT.email]);
 const registeredLibrarianCodes = new Set<string>();
 let mockUserSeq = 3;
 
-export const loginMock = ({ id, password }: LoginRequest): Promise<LoginResponse> => {
-    if (id !== MOCK_ACCOUNT.id || password !== MOCK_ACCOUNT.password) {
+export const loginMock = ({ username, password }: LoginRequest): Promise<LoginResponse> => {
+    if (username !== MOCK_ACCOUNT.id || password !== MOCK_ACCOUNT.password) {
         throw new ApiError("잘못된 아이디 혹은 비밀번호를 입력했습니다.", 401, "Unauthorized");
     }
     return mockDelay({
