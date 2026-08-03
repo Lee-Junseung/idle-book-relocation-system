@@ -34,8 +34,11 @@ export interface CompletedChecklistItem {
   title: string;
   author: string;
   publisher: string;
+  genre: string | null;        // ⚠️ 응답 필드로 확인됨 (스펙 캡처 기준) — nullable
+  isbn: string | null;         // ⚠️ 응답 필드로 확인됨 (스펙 캡처 기준) — nullable
   callNumber: string | null; // ⚠️ 실제 응답에서 null로 내려오는 경우 확인됨 (Postman 캡처 기준)
   coverUrl: string | null;   // ⚠️ 실제 응답에서 null로 내려오는 경우 확인됨 (Postman 캡처 기준)
+  turnoverRate: number | null; // ⚠️ 응답 필드로 확인됨 (스펙 캡처 기준) — nullable, 화면 turnover에 매핑
   checkedDate: string; // "2026-08-01"
   librarianName: string;
   totalScore: number;
@@ -166,6 +169,42 @@ export interface CheckItemMaster {
 export type CheckItemListResponse = ApiEnvelope<CheckItemMaster[]>;
 
 // ------------------------------------------------------------------
+// 8. 폐기/이관/보존 결정 확정 (프론트 설계안 — 백엔드 확정 전)
+//    PUT /api/checklists/results/{resultBatchId}/decision
+//    ⚠️ 로컬 상태로만 관리하던 기능을 실제 서버 저장으로 전환하기 위해
+//       새로 설계한 엔드포인트입니다. 동일 목적의 기존 API가 있다면
+//       이 부분을 그것으로 교체해야 합니다.
+// ------------------------------------------------------------------
+
+export type DecisionType = "DISPOSAL" | "RELOCATION" | "KEEP";
+
+export interface ConfirmDecisionRequest {
+  decision: DecisionType;
+  librarianCode: string;
+  decidedDate: string; // "yyyy-MM-dd"
+}
+
+export interface ConfirmDecisionData {
+  resultBatchId: number;
+  decision: DecisionType;
+  decidedAt: string;
+}
+
+export type ConfirmDecisionResponse = ApiEnvelope<ConfirmDecisionData>;
+
+/** 화면의 처리 상태(BookStatus)를 결정 확정 API의 decision 값으로 변환합니다. */
+export function bookStatusToDecision(status: Exclude<BookStatus, "대기">): DecisionType {
+  switch (status) {
+    case "폐기승인":
+      return "DISPOSAL";
+    case "이관승인":
+      return "RELOCATION";
+    case "보존결정":
+      return "KEEP";
+  }
+}
+
+// ------------------------------------------------------------------
 // 프론트 공통 에러 타입
 //
 //    백엔드에 아직 전역 예외 핸들러(@RestControllerAdvice)가 없어서, 없는
@@ -244,11 +283,11 @@ export function mapCompletedItemToBook(
     id: String(item.bookId),
     title: item.title,
     author: item.author,
-    genre: "미분류", // TODO: 목록 API에 장르 정보 없음 — 도서 마스터 API 연동 필요
-    isbn: "", // TODO: 목록 API에 ISBN 없음
+    genre: item.genre ?? "미분류", // API가 genre를 내려주지만 nullable이라 null이면 폴백
+    isbn: item.isbn ?? "", // API가 isbn을 내려주지만 nullable이라 null이면 폴백
     branch: currentBranchName, // TODO: API에 지점 정보 없음 — 이 페이지 지점으로 임시 고정
     damage: scoreToDamage(item.totalScore),
-    turnover: 0, // TODO: 대출률 정보는 별도 API 필요
+    turnover: item.turnoverRate ?? 0, // API가 turnoverRate를 내려주지만 nullable이라 null이면 폴백
     lastLoan: item.checkedDate,
     status: apiStatusToBookStatus(item.status),
   } as Book;

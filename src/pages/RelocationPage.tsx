@@ -7,7 +7,7 @@ import {
 
 import { Card, SectionHeader, ScoreStackBar, ConfirmModal, withAlpha } from "../components";
 import { NAV, BLUE, GREEN, RED, AMBER } from "../constants/colors";
-import { fetchRelocationQueue } from "../data";
+import { fetchRelocationQueue } from "../api/relocationQueue";
 import { RelocationItem, ModalConfig } from "../types";
 
 import { CURRENT_LIBRARY } from "../constants/library";

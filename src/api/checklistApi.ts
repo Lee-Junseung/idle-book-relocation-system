@@ -23,6 +23,9 @@ import {
     CreateCheckItemResponse,
     CheckItemListResponse,
     CheckItemMaster,
+    ConfirmDecisionRequest,
+    ConfirmDecisionData,
+    ConfirmDecisionResponse,
 } from "../types/checklistApi";
 
 /**
@@ -160,6 +163,27 @@ export const createCheckItem = (
     body: CreateCheckItemRequest
 ): Promise<{ checkItemId: number }> =>
     USE_MOCK ? mock.createCheckItem(body) : createCheckItemReal(body);
+
+/**
+ * 8. 폐기/이관/보존 결정 확정 (프론트 설계안) — PUT /api/checklists/results/{resultBatchId}/decision
+ * ⚠️ 로컬 상태로만 관리하던 기능을 실제 서버 저장으로 전환하기 위해 새로 설계한
+ *    엔드포인트입니다. 동일 목적의 기존 백엔드 API가 확인되면 URL/바디를 교체해야 합니다.
+ */
+async function confirmDecisionReal(
+    resultBatchId: number,
+    body: ConfirmDecisionRequest
+): Promise<ConfirmDecisionData> {
+    const envelope = await request<ConfirmDecisionResponse>(
+        `/api/checklists/results/${resultBatchId}/decision`,
+        { method: "PUT", body: JSON.stringify(body) }
+    );
+    return envelope.data;
+}
+export const confirmDecision = (
+    resultBatchId: number,
+    body: ConfirmDecisionRequest
+): Promise<ConfirmDecisionData> =>
+    USE_MOCK ? mock.confirmDecision(resultBatchId, body) : confirmDecisionReal(resultBatchId, body);
 
 /** 7. 점검 항목(CheckItem) 전체 조회 — GET /api/checklists/check-items */
 async function getCheckItemsReal(): Promise<CheckItemMaster[]> {

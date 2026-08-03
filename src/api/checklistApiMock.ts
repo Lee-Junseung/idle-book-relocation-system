@@ -13,6 +13,8 @@ import {
   UpdateChecklistResultData,
   CreateCheckItemRequest,
   CheckItemMaster,
+  ConfirmDecisionRequest,
+  ConfirmDecisionData,
 } from "../types/checklistApi";
 
 const delay = (ms = 300) => new Promise((res) => setTimeout(res, ms));
@@ -28,8 +30,11 @@ const MOCK_ITEMS: CompletedChecklistListResponse = [
     title: "어린왕자",
     author: "생텍쥐페리",
     publisher: "문학동네",
+    genre: "소설",
+    isbn: "978-1234567890",
     callNumber: "813.6-생72ㅇ",
     coverUrl: "https://picsum.photos/seed/book1/200/280",
+    turnoverRate: 3.2,
     checkedDate: "2026-08-01",
     librarianName: "LIB001",
     totalScore: 80,
@@ -41,8 +46,11 @@ const MOCK_ITEMS: CompletedChecklistListResponse = [
     title: "데미안",
     author: "헤르만 헤세",
     publisher: "민음사",
+    genre: null,
+    isbn: null,
     callNumber: "853.6-헤44ㄷ",
     coverUrl: "https://picsum.photos/seed/book2/200/280",
+    turnoverRate: null,
     checkedDate: "2026-07-28",
     librarianName: "LIB002",
     totalScore: 35,
@@ -54,8 +62,11 @@ const MOCK_ITEMS: CompletedChecklistListResponse = [
     title: "1984",
     author: "조지 오웰",
     publisher: "민음사",
+    genre: "소설",
+    isbn: "978-9876543210",
     callNumber: "843-오96일",
     coverUrl: "https://picsum.photos/seed/book3/200/280",
+    turnoverRate: 0.5,
     checkedDate: "2026-07-20",
     librarianName: "LIB001",
     totalScore: 92,
@@ -192,6 +203,22 @@ export async function updateChecklistResult(
   }
   const totalScore = body.checkResults.reduce((sum, r) => sum + r.itemScore, 0);
   return { resultBatchId, totalScore, updatedAt: new Date().toISOString() };
+}
+
+/** 8. 폐기/이관/보존 결정 확정 (Mock) — 없는 resultBatchId는 500(비JSON) 응답을 재현합니다 */
+export async function confirmDecision(
+  resultBatchId: number,
+  body: ConfirmDecisionRequest
+): Promise<ConfirmDecisionData> {
+  await delay();
+  if (NON_EXISTENT_RESULT_BATCH_IDS.has(resultBatchId)) {
+    throw new ChecklistApiError(
+      "요청하신 데이터를 찾을 수 없거나 서버에서 오류가 발생했습니다. (존재하지 않는 항목일 수 있습니다)",
+      "NOT_FOUND_LIKELY",
+      500
+    );
+  }
+  return { resultBatchId, decision: body.decision, decidedAt: new Date().toISOString() };
 }
 
 /** 6. 점검 항목(CheckItem) 등록 (Mock) */

@@ -1,3 +1,6 @@
+// 상세 패널의 "최근 10년 대출 추이" 미니차트 / 파손 사유 문구용 데모 데이터.
+// 대출 이력·파손 사유를 내려주는 API가 아직 없어, 화면 표시용으로만 쓰는 하드코딩 데이터입니다.
+// 실제 API가 추가되면 이 파일 대신 그 응답을 사용해야 합니다.
 import { LoanHistoryPoint } from "../types";
 
 export const BOOK_LOAN_HISTORY: Record<string, LoanHistoryPoint[]> = {
@@ -26,4 +29,3 @@ export const BOOK_DAMAGE_REASON: Record<string, string> = {
   "BK-10183": "파손 부위: 전체적 황변, 표지 박리",
   "BK-10218": "파손 부위: 등면 완전 분리, 페이지 탈락",
 };
-

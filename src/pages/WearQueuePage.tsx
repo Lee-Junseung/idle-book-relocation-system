@@ -43,15 +43,13 @@ export function WearQueuePage({
   const [page, setPage] = useState(0);
   const [pageInfo, setPageInfo] = useState({ totalPages: 1, totalElements: 0 });
 
-  // OverviewPage와 동일한 형태: 최초 진입 시에만 전체 로딩 화면을 보여주고,
-  // 이후 페이지 이동/새로고침은 refreshing 표시만으로 처리한다.
+  // 최초 진입 시에만 전체 로딩 화면을 보여주고, 이후 페이지 이동/새로고침은 refreshing 표시만으로 처리한다.
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ChecklistErrorState | null>(null);
   const [saveError, setSaveError] = useState<ChecklistErrorState | null>(null);
 
-  // ── API ① 도서 리스트 조회 (GET /api/checklists?status=DAMAGE_PENDING&page=&size=)
-  // 서버가 "해당 지점 + 점검 미등록(DAMAGE_PENDING)" 조건을 이미 필터링해서 내려주므로
-  // 프론트에서 branch/inspection 상태를 다시 거를 필요 없음
+  // 도서 리스트 조회 (GET /api/checklists?status=DAMAGE_PENDING&page=&size=)
+  // 서버가 "해당 지점 + 점검 미등록(DAMAGE_PENDING)" 조건을 이미 필터링해서 내려주므로 프론트에서 branch/inspection 상태를 다시 거를 필요 없음
   const fetchQueueBooks = useCallback(async (targetPage = 0) => {
     setError(null);
     try {
@@ -72,7 +70,7 @@ export function WearQueuePage({
 
   useEffect(() => { fetchQueueBooks(0); }, [fetchQueueBooks]);
 
-  // ── API ② 유휴화 도서 새로고침 (POST /api/checklists/idle-classify → 목록 재조회)
+  // 유휴화 도서 새로고침 (POST /api/checklists/idle-classify → 목록 재조회)
   // idle-classify로 서버 측 재산정을 먼저 수행한 뒤, 갱신된 결과를 1페이지부터 다시 불러온다.
   // idle-classify 자체가 실패하면 목록 조회는 하지 않고 바로 에러를 표시한다.
   const handleRefresh = async () => {
@@ -130,11 +128,11 @@ export function WearQueuePage({
       ? (sortDir === "desc" ? <ChevronDown className="w-3.5 h-3.5 text-primary" /> : <ChevronUp className="w-3.5 h-3.5 text-primary" />)
       : <ChevronDown className="w-3.5 h-3.5 opacity-25" />;
 
-  // ── API ③ 점검 리스트 등록 (POST /api/checklists/results)
+  // 점검 리스트 등록 (POST /api/checklists/results)
   const handleChecklistSave = async (insp: DamageInspection) => {
     if (!checklistTarget) return;
 
-    // ⚠️ 로그인 응답에 librarianCode가 내려오지 않아 세션에 값이 없을 수 있음(App.tsx/types/index.ts 참고).
+    // 로그인 응답에 librarianCode가 내려오지 않아 세션에 값이 없을 수 있음(App.tsx/types/index.ts 참고).
     // 빈 값으로 등록 요청을 보내면 백엔드에서 어느 사서가 점검했는지 알 수 없으므로 여기서 미리 막는다.
     if (!librarianCode) {
       setSaveError({ message: "사서 정보를 확인할 수 없습니다. 다시 로그인한 후 시도해 주세요." });
@@ -187,7 +185,7 @@ export function WearQueuePage({
         <SectionHeader
           title="마모 점검 대상 목록"
           sub={`점검 리스트 미등록 도서 자동 추출
-          유휴화 점수 = (KDC별 정보 노후도 가중치 X 정보 노후도 점수) + (KDC별 대출 저조도 가중치 X 대출 저조도 점수)`}>
+          `}>
           <button onClick={handleRefresh} disabled={refreshing}
             className="flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium text-white disabled:opacity-60 whitespace-nowrap"
             style={{ backgroundColor: NAV }}>
@@ -297,7 +295,7 @@ export function WearQueuePage({
             </table>
           </div>
           <div className="px-4 py-3 border-t border-border bg-muted/20 flex items-center justify-between flex-wrap gap-2">
-            <span className="text-sm text-muted-foreground">{pageInfo.totalElements}건 중 {queueBooks.length}건 표시 · 유휴화 점수 산정 도서 중 점검 리스트가 등록되지 않은 도서입니다</span>
+            <span className="text-sm text-muted-foreground">{pageInfo.totalElements}건 중 {queueBooks.length}건 표시 · 유휴화 점수 = (정보 노후도 점수 × 0.3) + (대출 저조도 점수 × 0.4) + (대출 감소도 점수 × 0.3)</span>
             {pageInfo.totalPages > 1 && (
               <div className="flex gap-1">
                 {Array.from({ length: pageInfo.totalPages }, (_, i) => i).map((p) => (

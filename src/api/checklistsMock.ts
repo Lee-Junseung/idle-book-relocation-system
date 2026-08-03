@@ -1,4 +1,5 @@
-// VITE_USE_MOCK=true 일 때 사용하는 목업 구현체. hashCode 기반이라 새로고침해도 값이 흔들리지 않음.
+// VITE_USE_MOCK=true 일 때 사용하는 목업 구현체.
+// hashCode 기반이라 새로고침해도 값이 흔들리지 않음.
 import { hashCode, mockDelay } from "./client";
 import {
     ChecklistListItem,
@@ -27,16 +28,21 @@ const MOCK_POOL: { bookTitle: string; author: string; genre: string }[] = [
 function buildMockItem(index: number): ChecklistListItem {
     const base = MOCK_POOL[index % MOCK_POOL.length];
     const h = hashCode(`checklist-${index}`);
+    const sage = Math.round((10 + (h % 80)) * 10) / 10;
+    const sloan = Math.round((10 + ((h >> 3) % 80)) * 10) / 10;
+    const sdecay = Math.round((10 + ((h >> 5) % 80)) * 10) / 10;
+    // u_score = (Sage × 0.3) + (Sloan × 0.4) + (Sdecay × 0.3)
+    const idleScore = Math.round((sage * 0.3 + sloan * 0.4 + sdecay * 0.3) * 10) / 10;
     return {
         resultId: index + 1,
         isbn: String(1000 + index),
         bookTitle: base.bookTitle,
         author: base.author,
         genre: base.genre,
-        idleScore: Math.round((40 + (h % 60)) * 10) / 10,
-        sage: Math.round((10 + (h % 80)) * 10) / 10,
-        sloan: Math.round((10 + ((h >> 3) % 80)) * 10) / 10,
-        sdecay: Math.round((10 + ((h >> 5) % 80)) * 10) / 10,
+        idleScore,
+        sage,
+        sloan,
+        sdecay,
     };
 }
 
@@ -64,13 +70,13 @@ export const registerChecklistApiMock = (
         status: "SUCCESS",
         message: "도서 점검 결과가 성공적으로 저장되었습니다.",
         data: {
-            resultBatchId: hashCode(`${body.bookId}-${body.checkedDate}`),
+            resultBatchId: hashCode(`${body.resultId}-${body.checkedDate}`),
             totalScore: body.totalScore,
             checkedAt: new Date().toISOString(),
         },
     });
 
-// ── 유휴화 도서 재산정 목업 (POST /api/checklists/idle-classify)
+// 유휴화 도서 재산정 목업 (POST /api/checklists/idle-classify)
 // 매 호출마다 시각을 섞은 해시로 값이 조금씩 바뀌도록 해서 "재산정이 실제로 돌았다"는 느낌만 재현.
 export const classifyIdleBooksApiMock = (): Promise<IdleClassifyResponse> => {
     const h = hashCode(`idle-classify-${Date.now()}`);

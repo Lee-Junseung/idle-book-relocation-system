@@ -37,7 +37,7 @@ export interface CheckResultItem {
 
 // POST /api/checklists/results 요청 바디
 export interface ChecklistRegisterRequest {
-    bookId: number;
+    resultId: number;
     librarianCode: string;
     checkedDate: string;
     totalScore: number;

@@ -15,7 +15,7 @@ import {
     classifyIdleBooksApiMock,
 } from "./checklistsMock";
 
-// ── ① 마모 점검 대상 도서 목록 조회 (GET /api/checklists?status=&page=&size=)
+// 마모 점검 대상 도서 목록 조회 (GET /api/checklists?status=&page=&size=)
 export const getChecklistListApi = (
     status: ChecklistStatus,
     page: number,
@@ -46,13 +46,13 @@ export function mapToBook(item: ChecklistListItem): Book {
     };
 }
 
-// ── ② 점검 결과 등록 (POST /api/checklists/results)
+// 점검 결과 등록 (POST /api/checklists/results)
 export const registerChecklistApi = (
     body: ChecklistRegisterRequest
 ): Promise<ChecklistRegisterResponse> =>
     USE_MOCK ? registerChecklistApiMock(body) : apiPost<ChecklistRegisterResponse>("/api/checklists/results", body);
 
-// isPassed 기준(1~2점=양호 임시 가정), bookId=resultId 가정
+// isPassed 기준(1~2점=양호)
 export function buildChecklistRegisterRequest(
     bookId: string,
     insp: DamageInspection,
@@ -67,7 +67,7 @@ export function buildChecklistRegisterRequest(
     const totalScore = checkResults.reduce((sum, r) => sum + r.itemScore, 0);
 
     return {
-        bookId: Number(bookId),
+        resultId: Number(bookId),
         librarianCode,
         checkedDate: insp.date,
         totalScore,
@@ -75,9 +75,9 @@ export function buildChecklistRegisterRequest(
     };
 }
 
-// ── ③ 유휴화 도서 재산정 (POST /api/checklists/idle-classify)
-// 요청 바디 없음. WearQueuePage의 "유휴화 도서 새로고침" 버튼에서 호출한 뒤
-// getChecklistListApi로 1페이지부터 목록을 다시 조회하는 방식으로 사용.
+// 유휴화 도서 재산정 (POST /api/checklists/idle-classify)
+// 요청 바디 없음.
+// WearQueuePage의 "유휴화 도서 새로고침" 버튼에서 호출한 뒤 getChecklistListApi로 1페이지부터 목록을 다시 조회하는 방식으로 사용.
 export const classifyIdleBooksApi = (): Promise<IdleClassifyResponse> =>
     USE_MOCK
         ? classifyIdleBooksApiMock()

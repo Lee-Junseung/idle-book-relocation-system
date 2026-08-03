@@ -1,13 +1,13 @@
 // 점검 리스트 등록이 완료된 도서를 필터/정렬하고, 폐기·이관·보존을 결정 확정하는 페이지
-//
-// [API 연동 메모]
-// - 목록(2번)/상세(3번)/이력(4번)/수정(5번) 모두 실제 API로 연동되어 있습니다.
-//   (mock ↔ 실제 API 전환은 .env.local의 VITE_USE_MOCK 값으로 자동 처리됩니다 —
-//    api/checklistApi.ts 내부에서 분기하므로 이 파일의 import를 직접 바꿀 필요는 없습니다.)
+// mock ↔ 실제 API 전환은 .env.local의 VITE_USE_MOCK 값으로 자동 처리
+// api/checklistApi.ts 내부에서 분기하므로 이 파일의 import를 직접 바꿀 필요는 없습니다.
 // - "전체 점검 이력 보기" 버튼으로 이력(4번)이 화면에 노출되어 있습니다.
-// - 폐기/이관/보존 "결정"을 서버에 확정 저장하는 API가 아직 없어서, 해당
-//   상태는 지금처럼 로컬 상태로만 관리됩니다.
-// - 목록 API가 genre/isbn/branch/turnover 를 내려주지 않아 임시값으로 채웁니다.
+// - 폐기/이관/보존 "결정" 확정(6번)은 프론트 설계안(백엔드 확정 전)입니다.
+//   성공한 건만 로컬 상태(applyAction)에도 반영합니다.
+//   ⚠️ 동일 목적의 기존 백엔드 API가 확인되면 api/checklistApi.ts의
+//      confirmDecisionReal 쪽 URL/바디를 그것으로 교체해야 합니다.
+// - 목록 API가 genre/isbn/turnoverRate는 내려주지만(nullable) branch(지점)는 내려주지
+//   않아 branch만 이 페이지 지점명으로 임시 고정합니다.
 //   (src/types/checklistApi.ts의 mapCompletedItemToBook 참고)
 // - 백엔드에 전역 예외 핸들러가 없어 없는 리소스 조회 시 500(비JSON)이 내려올
 //   수 있어, 프론트에서 이를 감지해 우호적인 메시지로 표시합니다.
@@ -23,10 +23,9 @@ import {
 
 import { Card, SectionHeader, DamageDot, DamageTooltipCell, ConfirmModal, InspectionChecklistModal, withAlpha, getDotColor, getDotLabel } from "../components";
 import { NAV, GREEN, RED, PURPLE, AMBER } from "../constants/colors";
-import { BOOK_LOAN_HISTORY, BOOK_DAMAGE_REASON } from "../data/bookDetails";
-import { INSP_ITEMS_FLAT, averageScore } from "../constants/checklistItems";
-import { buildMonthlyLoanData } from "../data/wearUtils";
-import { clampToScore } from "../data/seed";
+import { BOOK_LOAN_HISTORY, BOOK_DAMAGE_REASON } from "../constants/bookDemoData";
+import { INSP_ITEMS_FLAT, averageScore, clampToScore } from "../constants/checklistItems";
+import { buildMonthlyLoanData } from "../components/lib";
 import { Book, BookStatus, DamageInspection, ModalConfig } from "../types";
 import {
   ChecklistApiError,
@@ -34,6 +33,8 @@ import {
   ChecklistHistoryEntry,
   mapCompletedItemToBook,
   UpdateCheckResultInput,
+  bookStatusToDecision,
+  CheckItemMaster,
 } from "../types/checklistApi";
 
 import { CURRENT_LIBRARY } from "../constants/library";
@@ -101,6 +102,23 @@ export function WearManagePage({
   useEffect(() => {
     loadCompletedList();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // --- API 연동: 점검 항목 마스터 조회 (checkItemId -> maxScore 등) ------
+  // 화면 내부 척도(1~5)를 실제 항목별 만점(maxScore)에 맞춰 변환할 때 사용합니다.
+  // 실패해도 화면 자체는 계속 쓸 수 있어야 하므로, 실패 시 조용히 폴백(만점 5로 간주)합니다.
+  const [checkItemMaster, setCheckItemMaster] = useState<Record<number, CheckItemMaster>>({});
+
+  useEffect(() => {
+    checklistApi
+      .getCheckItems()
+      .then((items) => setCheckItemMaster(Object.fromEntries(items.map((item) => [item.id, item]))))
+      .catch((err: unknown) => {
+        console.warn(
+          "[WearManagePage] 점검 항목 마스터 조회 실패 — 항목별 만점을 5점으로 간주해 계속 진행합니다.",
+          err
+        );
+      });
   }, []);
 
   // --- API 연동: 상세 조회 (행 패널을 펼칠 때) ---------------------------
@@ -177,6 +195,62 @@ export function WearManagePage({
   const applyAction = (ids: string[], status: BookStatus) =>
     setBooks((prev) => prev.map((b) => ids.includes(b.id) ? { ...b, status } : b));
 
+  // --- API 연동: 폐기/이관/보존 결정 확정 (실제 서버 저장) --------------
+  const [decisionSaving, setDecisionSaving] = useState(false);
+
+  // resultBatchId가 있는 도서만 서버에 저장 요청을 보내고, 없는 도서는
+  // 건너뛴 뒤 실패로 안내합니다 (목록 새로고침이 필요한 상태일 수 있음).
+  const confirmDecisionForBooks = async (ids: string[], status: Exclude<BookStatus, "대기">) => {
+    if (!librarianCode) {
+      setModal({
+        title: "처리 실패",
+        body: "사서 정보를 확인할 수 없습니다. 다시 로그인한 후 시도해 주세요.",
+        confirmLabel: "확인",
+        confirmColor: RED,
+        icon: "danger",
+        onConfirm: () => { },
+      });
+      return;
+    }
+
+    const decision = bookStatusToDecision(status);
+    const decidedDate = new Date().toISOString().slice(0, 10);
+    const targets = ids.filter((id) => resultBatchByBookId[id] !== undefined);
+    const skipped = ids.filter((id) => resultBatchByBookId[id] === undefined);
+
+    setDecisionSaving(true);
+    const results = await Promise.allSettled(
+      targets.map((id) =>
+        checklistApi.confirmDecision(resultBatchByBookId[id], { decision, librarianCode, decidedDate })
+      )
+    );
+    setDecisionSaving(false);
+
+    const succeededIds = targets.filter((_, i) => results[i].status === "fulfilled");
+    const failedCount = targets.length - succeededIds.length + skipped.length;
+
+    // 서버 저장에 성공한 건만 화면 상태에도 반영합니다.
+    if (succeededIds.length > 0) applyAction(succeededIds, status);
+
+    if (failedCount > 0) {
+      const firstError = results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
+      const message =
+        firstError?.reason instanceof ChecklistApiError
+          ? firstError.reason.message
+          : "일부 도서의 처리 결정 저장에 실패했습니다.";
+      setModal({
+        title: succeededIds.length > 0 ? "일부 처리 실패" : "처리 실패",
+        body: succeededIds.length > 0
+          ? `${succeededIds.length}건 저장 완료, ${failedCount}건 저장 실패했습니다. (${message})`
+          : message,
+        confirmLabel: "확인",
+        confirmColor: RED,
+        icon: "danger",
+        onConfirm: () => { },
+      });
+    }
+  };
+
   const requestAction = (book: Book, status: Exclude<BookStatus, "대기">) => {
     const meta = STATUS_META[status];
     setModal({
@@ -190,9 +264,7 @@ export function WearManagePage({
         lastLoan: book.lastLoan, damage: book.damage,
         turnover: book.turnover, branch: book.branch,
       },
-      // ⚠️ 폐기/이관/보존 "결정"을 서버에 확정 저장하는 API가 아직 없어
-      // 지금은 로컬 상태만 갱신합니다. API가 추가되면 여기서 호출해야 합니다.
-      onConfirm: () => applyAction([book.id], status),
+      onConfirm: () => { void confirmDecisionForBooks([book.id], status); },
     });
   };
 
@@ -207,7 +279,7 @@ export function WearManagePage({
       confirmLabel: `${ids.length}건 ${meta.label} 확정`,
       confirmColor: meta.color,
       icon: meta.icon,
-      onConfirm: () => { applyAction(ids, status); setSelected(new Set()); },
+      onConfirm: () => { void confirmDecisionForBooks(ids, status); setSelected(new Set()); },
     });
   };
 
@@ -250,16 +322,17 @@ export function WearManagePage({
     const resultBatchId = resultBatchByBookId[targetId];
     // ⚠️ isPassed 판정 기준(몇 점 이하를 "통과"로 볼지)은 아직 정책이 확정되지
     // 않아 1점(양호)만 통과로 임시 처리합니다 — 기준 확정되면 교체 필요.
-    // ⚠️ itemScore를 화면 내부 1~5점 척도(insp[key])로 그대로 보내고 있는데,
-    // check-items 마스터(GET /checklists/check-items)에서 확인된 실제 maxScore는
-    // 항목별로 5/10 등으로 다릅니다. 항목별 만점 기준이 확정되면 스케일 변환이
-    // 필요합니다 — README "백엔드 확인 필요" 항목 참고.
+    // 화면 내부 척도는 1~5점 고정이지만, 항목별 실제 만점(maxScore)은
+    // GET /checklists/check-items(마스터 조회)로 받아온 값을 사용해 변환합니다.
+    // 마스터 조회가 실패했거나 해당 항목이 없으면 만점 5(=화면 척도와 동일)로 간주합니다.
     const checkResults: UpdateCheckResultInput[] = INSP_ITEMS_FLAT.map(({ key, checkItemId }) => {
       const value = insp[key] as unknown as number;
+      const maxScore = checkItemMaster[checkItemId]?.maxScore ?? 5;
+      const itemScore = Math.round((value / 5) * maxScore);
       return {
         checkItemId,
         isPassed: value <= 1,
-        itemScore: value,
+        itemScore,
       };
     });
     // 백엔드 totalScore는 15개 항목 itemScore의 합으로 봅니다 (constants/checklistItems.ts의
@@ -671,7 +744,7 @@ export function WearManagePage({
           )}
           <div className="px-4 py-3 border-t border-border bg-muted/20 flex items-center justify-between">
             <span className="text-sm text-muted-foreground">
-              {filtered.length}건 표시 중{saving ? " · 저장 중…" : ""}
+              {filtered.length}건 표시 중{(saving || decisionSaving) ? " · 저장 중…" : ""}
             </span>
             <div className="flex gap-1">
               {[1, 2, 3, "…", 6].map((p, i) => (

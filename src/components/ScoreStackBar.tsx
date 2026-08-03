@@ -6,7 +6,8 @@ import { NAV, BLUE, TEAL, AMBER, GREEN } from "../constants/colors";
 
 const TOOLTIP_WIDTH = 224;
 const TOOLTIP_MARGIN = 8;
-// 바 그래프의 개별 항목 시각 폭 상한(%). 실제 데이터 값이 아니라 UI 상 겹침 방지용 캡이라 별도 상수로 명시.
+// 바 그래프의 개별 항목 시각 폭 상한(%).
+// 실제 데이터 값이 아니라 UI 상 겹침 방지용 캡이라 별도 상수로 명시.
 const BAR_VISUAL_CAP = 40;
 
 interface TooltipPosition {
@@ -19,9 +20,9 @@ export function ScoreStackBar({ item }: { item: RelocationItem }) {
   const triggerRef = useRef<HTMLDivElement>(null);
   const [tooltipPos, setTooltipPos] = useState<TooltipPosition | null>(null);
 
-  // Fdist는 PDF 원식상 0~1 값이다 (1 / (1 + e^(0.2×(d−15)))).
-  // 나머지 세 지표(Sdemand/Sgap/Sspace)는 0~100 스케일이라 그대로 가중합하면 거리 요소의 영향력이
-  // 사실상 사라지므로, 100배 스케일링 후 0.3 가중치를 적용한다 → 실질 가중치는 0.3×100 = 30.
+  // Fdist는 0~1 값이다 (1 / (1 + e^(0.2×(d−15)))).
+  // 나머지 세 지표(Sdemand/Sgap/Sspace)는 0~100 스케일이라 그대로 가중합하면 거리 요소의 영향력이 사실상 사라지므로, 100배 스케일링 후 0.3 가중치를 적용한다.
+  // 실질 가중치는 0.3×100 = 30.
   const distC = +(item.fDist * 30).toFixed(1);
   const demandC = +(item.sDemand * 0.25).toFixed(1);
   const gapC = +(item.sGap * 0.25).toFixed(1);

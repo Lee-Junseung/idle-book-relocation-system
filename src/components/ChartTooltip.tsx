@@ -17,7 +17,7 @@ export function ChartTooltip({ active, payload, label }: ChartTooltipProps) {
     <div className="bg-card border border-border rounded shadow-lg px-3 py-2 text-xs">
       <p className="font-semibold text-foreground mb-1">{label}</p>
       {payload.map((p, i) => (
-        // key: name이 중복될 수 있어 index를 함께 조합해 충돌 방지
+        // name이 중복될 수 있어 index를 함께 조합해 충돌 방지
         <div key={`${p.name}-${i}`} className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
           <span className="text-muted-foreground">{p.name}:</span>
