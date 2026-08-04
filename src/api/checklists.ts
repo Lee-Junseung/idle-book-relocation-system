@@ -40,9 +40,9 @@ export function mapToBook(item: ChecklistListItem): Book {
         copies: 0,
         status: "대기",
         idleScore: item.idleScore,
-        sage: item.sage,
-        sloan: item.sloan,
-        sdecay: item.sdecay,
+        sage: item.sAge,
+        sloan: item.sLoan,
+        sdecay: item.sDecay,
     };
 }
 

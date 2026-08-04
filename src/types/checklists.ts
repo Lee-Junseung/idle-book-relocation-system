@@ -1,5 +1,4 @@
 // 마모 점검 대상 도서 목록 조회(GET) / 점검 리스트 등록(POST) / 유휴화 재산정(POST) API의 요청·응답 타입
-
 export type ChecklistStatus = "DAMAGE_PENDING"; // 추후 다른 상태값이 생기면 union으로 확장
 
 export interface ChecklistPageInfo {
@@ -16,9 +15,9 @@ export interface ChecklistListItem {
     author: string;
     genre: string;
     idleScore: number;
-    sage: number;
-    sloan: number;
-    sdecay: number;
+    sAge: number;
+    sLoan: number;
+    sDecay: number;
 }
 
 // GET /api/checklists?status=DAMAGE_PENDING&page=&size= 응답

@@ -35,9 +35,9 @@ function buildMockItem(index: number): ChecklistListItem {
         author: base.author,
         genre: base.genre,
         idleScore: Math.round((40 + (h % 60)) * 10) / 10,
-        sage: Math.round((10 + (h % 80)) * 10) / 10,
-        sloan: Math.round((10 + ((h >> 3) % 80)) * 10) / 10,
-        sdecay: Math.round((10 + ((h >> 5) % 80)) * 10) / 10,
+        sAge: Math.round((10 + (h % 80)) * 10) / 10,
+        sLoan: Math.round((10 + ((h >> 3) % 80)) * 10) / 10,
+        sDecay: Math.round((10 + ((h >> 5) % 80)) * 10) / 10,
     };
 }
 
