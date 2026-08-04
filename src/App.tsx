@@ -38,10 +38,6 @@ const ALL_BOOKS: Book[] = [
   { id: "BK-10284", title: "수원화성 건축사", author: "정조실록 연구회", isbn: "978-89-7769-041-5", genre: "향토사", branch: "북수원도서관", lastLoan: "2023-11-22", damage: 3, turnover: 0.9, copies: 3, status: "대기" },
 ];
 
-// ⚠️ 원래 src/data/damageInspections.ts가 이번 업로드된 src.zip에 포함돼있지 않아
-// 임시로 빈 시드로 채워 넣은 상태입니다. 실제 저장소에 원본이 남아있다면 이 스텁을
-// 지우고 원본 값으로 교체해 주세요. 지금 상태로는 "아직 아무 도서도 점검되지 않은 것"처럼
-// 보일 수 있습니다. (점검 항목 정의는 constants/checklistItems.ts 참고)
 const DAMAGE_INSPECTIONS: Record<string, DamageInspection> = {};
 
 interface NavItem {

@@ -1,24 +1,11 @@
 // 점검 리스트 등록이 완료된 도서를 필터/정렬하고, 폐기·이관·보존을 결정 확정하는 페이지
-// mock ↔ 실제 API 전환은 .env.local의 VITE_USE_MOCK 값으로 자동 처리
-// api/checklistApi.ts 내부에서 분기하므로 이 파일의 import를 직접 바꿀 필요는 없습니다.
-// - "전체 점검 이력 보기" 버튼으로 이력(4번)이 화면에 노출되어 있습니다.
-// - 폐기/이관/보존 "결정" 확정(6번)은 프론트 설계안(백엔드 확정 전)입니다.
-//   성공한 건만 로컬 상태(applyAction)에도 반영합니다.
-//   ⚠️ 동일 목적의 기존 백엔드 API가 확인되면 api/checklistApi.ts의
-//      confirmDecisionReal 쪽 URL/바디를 그것으로 교체해야 합니다.
-// - 목록 API가 genre/isbn/turnoverRate는 내려주지만(nullable) branch(지점)는 내려주지
-//   않아 branch만 이 페이지 지점명으로 임시 고정합니다.
-//   (src/types/checklistApi.ts의 mapCompletedItemToBook 참고)
-// - 백엔드에 전역 예외 핸들러가 없어 없는 리소스 조회 시 500(비JSON)이 내려올
-//   수 있어, 프론트에서 이를 감지해 우호적인 메시지로 표시합니다.
-import * as checklistApi from "../api/checklistApi";
-
 import { useState, useMemo, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import {
   Trash2, MoveRight, BookMarked,
   ChevronUp, ChevronDown, Check, Clock, ListFilter,
   X, Search, ClipboardEdit, Tag, Loader2, AlertTriangle, History,
+  ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight,
 } from "lucide-react";
 
 import { Card, SectionHeader, DamageDot, DamageTooltipCell, ConfirmModal, InspectionChecklistModal, withAlpha, getDotColor, getDotLabel } from "../components";
@@ -28,14 +15,22 @@ import { INSP_ITEMS_FLAT, averageScore, clampToScore } from "../constants/checkl
 import { buildMonthlyLoanData } from "../components/lib";
 import { Book, BookStatus, DamageInspection, ModalConfig } from "../types";
 import {
-  ChecklistApiError,
+  getCompletedChecklistsApi,
+  getBookDetailApi,
+  getBookHistoryApi,
+  updateChecklistResultApi,
+  getCheckItemsApi,
+  confirmDecisionApi,
+  mapCompletedItemToBook,
+  bookStatusToDecision,
+} from "../api/resultChecklist";
+import { ApiError } from "../api/client";
+import {
   BookDetailResult,
   ChecklistHistoryEntry,
-  mapCompletedItemToBook,
   UpdateCheckResultInput,
-  bookStatusToDecision,
   CheckItemMaster,
-} from "../types/checklistApi";
+} from "../types/resultChecklist";
 
 import { CURRENT_LIBRARY } from "../constants/library";
 
@@ -73,17 +68,19 @@ export function WearManagePage({
   const [panelBook, setPanelBook] = useState<Book | null>(null);
   const [checklistTarget, setChecklistTarget] = useState<Book | null>(null);
 
-  // --- API 연동: 목록 조회 ---------------------------------------------
+  // 목록 조회
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
   // bookId -> resultBatchId (상세 수정 PUT 호출 시 필요)
   const [resultBatchByBookId, setResultBatchByBookId] = useState<Record<string, number>>({});
 
+  const PAGE_SIZE = 10;
+  const [page, setPage] = useState(0);
+
   const loadCompletedList = () => {
     setListLoading(true);
     setListError(null);
-    checklistApi
-      .getCompletedChecklists()
+    getCompletedChecklistsApi()
       .then((items) => {
         const mapped = items.map((item) => mapCompletedItemToBook(item, branchFilter));
         setBooks(mapped);
@@ -93,7 +90,7 @@ export function WearManagePage({
       })
       .catch((err: unknown) => {
         const message =
-          err instanceof ChecklistApiError ? err.message : "점검 완료 도서 목록을 불러오지 못했습니다.";
+          err instanceof ApiError ? err.message : "점검 완료 도서 목록을 불러오지 못했습니다.";
         setListError(message);
       })
       .finally(() => setListLoading(false));
@@ -104,14 +101,13 @@ export function WearManagePage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // --- API 연동: 점검 항목 마스터 조회 (checkItemId -> maxScore 등) ------
+  // 점검 항목 마스터 조회 (checkItemId -> maxScore 등)
   // 화면 내부 척도(1~5)를 실제 항목별 만점(maxScore)에 맞춰 변환할 때 사용합니다.
   // 실패해도 화면 자체는 계속 쓸 수 있어야 하므로, 실패 시 조용히 폴백(만점 5로 간주)합니다.
   const [checkItemMaster, setCheckItemMaster] = useState<Record<number, CheckItemMaster>>({});
 
   useEffect(() => {
-    checklistApi
-      .getCheckItems()
+    getCheckItemsApi()
       .then((items) => setCheckItemMaster(Object.fromEntries(items.map((item) => [item.id, item]))))
       .catch((err: unknown) => {
         console.warn(
@@ -121,7 +117,7 @@ export function WearManagePage({
       });
   }, []);
 
-  // --- API 연동: 상세 조회 (행 패널을 펼칠 때) ---------------------------
+  // 상세 조회 (행 패널을 펼칠 때)
   const [bookDetail, setBookDetail] = useState<BookDetailResult | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -134,19 +130,18 @@ export function WearManagePage({
     }
     setDetailLoading(true);
     setDetailError(null);
-    checklistApi
-      .getBookDetail(Number(panelBook.id))
+    getBookDetailApi(Number(panelBook.id))
       .then((detail) => setBookDetail(detail))
       .catch((err: unknown) => {
         const message =
-          err instanceof ChecklistApiError ? err.message : "점검 상세 정보를 불러오지 못했습니다.";
+          err instanceof ApiError ? err.message : "점검 상세 정보를 불러오지 못했습니다.";
         setDetailError(message);
         setBookDetail(null);
       })
       .finally(() => setDetailLoading(false));
   }, [panelBook]);
 
-  // --- API 연동: 전체 점검 이력 (4번, 버튼 클릭 시 조회) -----------------
+  // 전체 점검 이력 (4번, 버튼 클릭 시 조회)
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -164,12 +159,11 @@ export function WearManagePage({
     setHistoryOpen(true);
     setHistoryLoading(true);
     setHistoryError(null);
-    checklistApi
-      .getBookHistory(Number(bookId))
+    getBookHistoryApi(Number(bookId))
       .then((entries) => setHistoryEntries(entries))
       .catch((err: unknown) => {
         const message =
-          err instanceof ChecklistApiError ? err.message : "점검 이력을 불러오지 못했습니다.";
+          err instanceof ApiError ? err.message : "점검 이력을 불러오지 못했습니다.";
         setHistoryError(message);
         setHistoryEntries([]);
       })
@@ -192,14 +186,27 @@ export function WearManagePage({
     });
   }, [books, inspections, resultBatchByBookId, branchFilter, genreFilter, damageMin, search, sortKey, sortDir]);
 
-  const applyAction = (ids: string[], status: BookStatus) =>
-    setBooks((prev) => prev.map((b) => ids.includes(b.id) ? { ...b, status } : b));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
 
-  // --- API 연동: 폐기/이관/보존 결정 확정 (실제 서버 저장) --------------
+  // 필터/정렬 조건이 바뀌어 결과 수가 줄면 현재 페이지가 범위를 벗어날 수 있으므로 보정
+  useEffect(() => {
+    if (page > totalPages - 1) setPage(0);
+  }, [totalPages, page]);
+
+  const paginated = useMemo(
+    () => filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
+    [filtered, page]
+  );
+
+  const goToPage = (p: number) => {
+    if (p === page) return;
+    setPage(p);
+  };
+
+  // 폐기/이관/보존 결정 확정 (실제 서버 저장)
   const [decisionSaving, setDecisionSaving] = useState(false);
 
-  // resultBatchId가 있는 도서만 서버에 저장 요청을 보내고, 없는 도서는
-  // 건너뛴 뒤 실패로 안내합니다 (목록 새로고침이 필요한 상태일 수 있음).
+  // resultBatchId가 있는 도서만 서버에 저장 요청을 보내고, 없는 도서는 건너뛴 뒤 실패로 안내합니다 (목록 새로고침이 필요한 상태일 수 있음).
   const confirmDecisionForBooks = async (ids: string[], status: Exclude<BookStatus, "대기">) => {
     if (!librarianCode) {
       setModal({
@@ -221,21 +228,38 @@ export function WearManagePage({
     setDecisionSaving(true);
     const results = await Promise.allSettled(
       targets.map((id) =>
-        checklistApi.confirmDecision(resultBatchByBookId[id], { decision, librarianCode, decidedDate })
+        confirmDecisionApi(resultBatchByBookId[id], { decision, librarianCode, decidedDate })
       )
     );
     setDecisionSaving(false);
 
-    const succeededIds = targets.filter((_, i) => results[i].status === "fulfilled");
+    // 성공한 건만 화면 상태에도 반영합니다.
+    // 확정일(분류 확정일)은 서버가 응답으로 내려준 decidedAt(ISO 8601)을 그대로 사용합니다
+    // 클라이언트에서 보낸 decidedDate는 서버가 실제로 반영한 시각과 다를 수 있으므로 신뢰하지 않습니다.
+    const succeededEntries = targets
+      .map((id, i) => ({ id, result: results[i] }))
+      .filter(
+        (e): e is { id: string; result: PromiseFulfilledResult<Awaited<ReturnType<typeof confirmDecisionApi>>> } =>
+          e.result.status === "fulfilled"
+      );
+    const succeededIds = succeededEntries.map((e) => e.id);
     const failedCount = targets.length - succeededIds.length + skipped.length;
 
-    // 서버 저장에 성공한 건만 화면 상태에도 반영합니다.
-    if (succeededIds.length > 0) applyAction(succeededIds, status);
+    if (succeededEntries.length > 0) {
+      setBooks((prev) =>
+        prev.map((b) => {
+          const entry = succeededEntries.find((e) => e.id === b.id);
+          return entry
+            ? { ...b, status, decidedDate: entry.result.value.decidedAt.slice(0, 10) }
+            : b;
+        })
+      );
+    }
 
     if (failedCount > 0) {
       const firstError = results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
       const message =
-        firstError?.reason instanceof ChecklistApiError
+        firstError?.reason instanceof ApiError
           ? firstError.reason.message
           : "일부 도서의 처리 결정 저장에 실패했습니다.";
       setModal({
@@ -317,26 +341,22 @@ export function WearManagePage({
     const avgRounded = clampToScore(averageScore(insp));
     setBooks((prev) => prev.map((b) => b.id === targetId ? { ...b, damage: avgRounded } : b));
 
-    // --- API 연동: 점검 결과 수정 (PUT) --------------------------------
+    // 점검 결과 수정 (PUT)
     // INSP_ITEMS_FLAT의 각 항목이 checkItemId를 갖고 있으므로 그대로 매핑합니다.
     const resultBatchId = resultBatchByBookId[targetId];
-    // ⚠️ isPassed 판정 기준(몇 점 이하를 "통과"로 볼지)은 아직 정책이 확정되지
-    // 않아 1점(양호)만 통과로 임시 처리합니다 — 기준 확정되면 교체 필요.
-    // 화면 내부 척도는 1~5점 고정이지만, 항목별 실제 만점(maxScore)은
-    // GET /checklists/check-items(마스터 조회)로 받아온 값을 사용해 변환합니다.
-    // 마스터 조회가 실패했거나 해당 항목이 없으면 만점 5(=화면 척도와 동일)로 간주합니다.
+    // 통과 판정 기준: 화면 척도(1~5) 원점수 기준 2점 이하를 통과로 봅니다.
+    // itemScore 필드 자체는 maxScore로 스케일 변환된 값을 그대로 보내되(백엔드가 항목별 만점 기준 점수를 원하므로), "통과 여부"는 항목별 만점이 서로 달라도 두 화면에서 같은 의미를 갖도록 원점수로 판단합니다.
     const checkResults: UpdateCheckResultInput[] = INSP_ITEMS_FLAT.map(({ key, checkItemId }) => {
       const value = insp[key] as unknown as number;
       const maxScore = checkItemMaster[checkItemId]?.maxScore ?? 5;
       const itemScore = Math.round((value / 5) * maxScore);
       return {
         checkItemId,
-        isPassed: value <= 1,
+        isPassed: value <= 2,
         itemScore,
       };
     });
-    // 백엔드 totalScore는 15개 항목 itemScore의 합으로 봅니다 (constants/checklistItems.ts의
-    // averageScore 주석 참고). 화면 표시용 1~5 마모도(avgRounded)와는 별개 값입니다.
+    // 백엔드 totalScore는 15개 항목 itemScore의 합으로 봅니다. 화면 표시용 1~5 마모도(avgRounded)와는 별개 값입니다.
     const totalScoreForApi = checkResults.reduce((sum, r) => sum + r.itemScore, 0);
 
     if (!resultBatchId) {
@@ -348,8 +368,7 @@ export function WearManagePage({
       return;
     }
 
-    // WearQueuePage와 동일하게, 사서 식별 코드가 없으면 "누가 수정했는지" 알 수 없는 상태로
-    // 서버에 저장 요청을 보내지 않도록 사전에 막습니다.
+    // WearQueuePage와 동일하게, 사서 식별 코드가 없으면 "누가 수정했는지" 알 수 없는 상태로 서버에 저장 요청을 보내지 않도록 사전에 막습니다.
     if (!librarianCode) {
       setModal({
         title: "저장 실패",
@@ -365,7 +384,7 @@ export function WearManagePage({
 
     setSaving(true);
     try {
-      await checklistApi.updateChecklistResult(resultBatchId, {
+      await updateChecklistResultApi(resultBatchId, {
         bookId: Number(targetId),
         librarianCode,
         checkedDate: insp.date,
@@ -374,12 +393,12 @@ export function WearManagePage({
       });
       // 상세 패널이 같은 도서를 보고 있다면 최신 상태로 갱신
       if (panelBook?.id === targetId) {
-        const detail = await checklistApi.getBookDetail(Number(targetId));
+        const detail = await getBookDetailApi(Number(targetId));
         setBookDetail(detail);
       }
     } catch (err: unknown) {
       const message =
-        err instanceof ChecklistApiError ? err.message : "점검 결과 저장 중 오류가 발생했습니다.";
+        err instanceof ApiError ? err.message : "점검 결과 저장 중 오류가 발생했습니다.";
       setModal({
         title: "저장 실패",
         body: message,
@@ -527,7 +546,7 @@ export function WearManagePage({
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((book) => {
+                  {paginated.map((book) => {
                     const isSel = selected.has(book.id);
                     const done = book.status !== "대기";
                     const isActive = panelBook?.id === book.id;
@@ -577,7 +596,7 @@ export function WearManagePage({
                             )}
                           </td>
                           <td className="hidden lg:table-cell px-4 py-3 text-sm text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                            {book.status === "대기" ? <span className="text-muted-foreground/30">—</span> : "2026-07-17"}
+                            {book.decidedDate ?? <span className="text-muted-foreground/30">—</span>}
                           </td>
                           <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
@@ -735,7 +754,7 @@ export function WearManagePage({
                       </>
                     );
                   })}
-                  {filtered.length === 0 && (
+                  {paginated.length === 0 && (
                     <tr><td colSpan={8} className="py-16 text-center text-sm text-muted-foreground">조건에 해당하는 도서가 없습니다.</td></tr>
                   )}
                 </tbody>
@@ -746,12 +765,43 @@ export function WearManagePage({
             <span className="text-sm text-muted-foreground">
               {filtered.length}건 표시 중{(saving || decisionSaving) ? " · 저장 중…" : ""}
             </span>
-            <div className="flex gap-1">
-              {[1, 2, 3, "…", 6].map((p, i) => (
-                <button key={i} className={`w-8 h-8 text-sm rounded border font-medium transition-colors
-                  ${p === 1 ? "border-primary bg-primary text-white" : "border-border text-muted-foreground hover:bg-muted"}`}>{p}</button>
-              ))}
-            </div>
+            {totalPages > 1 && (() => {
+              const WINDOW = 5;
+              const half = Math.floor(WINDOW / 2);
+              let start = Math.max(0, page - half);
+              let end = Math.min(totalPages - 1, start + WINDOW - 1);
+              start = Math.max(0, end - WINDOW + 1);
+              const pages = Array.from({ length: end - start + 1 }, (_, i) => start + i);
+
+              const navBtnClass =
+                "w-8 h-8 flex items-center justify-center rounded border border-border text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors";
+
+              return (
+                <div className="flex gap-1">
+                  <button onClick={() => goToPage(0)} disabled={page === 0} className={navBtnClass} aria-label="처음 페이지">
+                    <ChevronsLeft className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => goToPage(page - 1)} disabled={page === 0} className={navBtnClass} aria-label="이전 페이지">
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+
+                  {pages.map((p) => (
+                    <button key={p} onClick={() => goToPage(p)}
+                      className={`w-8 h-8 text-sm rounded border font-medium transition-colors
+            ${p === page ? "border-primary bg-primary text-white" : "border-border text-muted-foreground hover:bg-muted"}`}>
+                      {p + 1}
+                    </button>
+                  ))}
+
+                  <button onClick={() => goToPage(page + 1)} disabled={page === totalPages - 1} className={navBtnClass} aria-label="다음 페이지">
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => goToPage(totalPages - 1)} disabled={page === totalPages - 1} className={navBtnClass} aria-label="끝 페이지">
+                    <ChevronsRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              );
+            })()}
           </div>
         </Card>
       </div>

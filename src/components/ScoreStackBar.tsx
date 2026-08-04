@@ -1,13 +1,12 @@
 // 매칭 스코어(M)를 막대그래프로 표시하고, 클릭/탭 또는 마우스오버 시 점수 산정 근거를 툴팁으로 보여주는 컴포넌트
 import { useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { RelocationItem } from "../types";
+import { TransferScoreDetails } from "../types/transfers";
 import { NAV, BLUE, TEAL, AMBER, GREEN } from "../constants/colors";
 
 const TOOLTIP_WIDTH = 224;
 const TOOLTIP_MARGIN = 8;
-// 바 그래프의 개별 항목 시각 폭 상한(%).
-// 실제 데이터 값이 아니라 UI 상 겹침 방지용 캡이라 별도 상수로 명시.
+// 바 그래프의 개별 항목 시각 폭 상한(%). 실제 데이터 값이 아니라 UI 상 겹침 방지용 캡이라 별도 상수로 명시.
 const BAR_VISUAL_CAP = 40;
 
 interface TooltipPosition {
@@ -16,39 +15,32 @@ interface TooltipPosition {
   placement: "above" | "below";
 }
 
-export function ScoreStackBar({ item }: { item: RelocationItem }) {
+export function ScoreStackBar({ score, scoreDetails }: { score: number; scoreDetails?: TransferScoreDetails }) {
   const triggerRef = useRef<HTMLDivElement>(null);
   const [tooltipPos, setTooltipPos] = useState<TooltipPosition | null>(null);
 
-  // Fdist는 0~1 값이다 (1 / (1 + e^(0.2×(d−15)))).
-  // 나머지 세 지표(Sdemand/Sgap/Sspace)는 0~100 스케일이라 그대로 가중합하면 거리 요소의 영향력이 사실상 사라지므로, 100배 스케일링 후 0.3 가중치를 적용한다.
-  // 실질 가중치는 0.3×100 = 30.
-  const distC = +(item.fDist * 30).toFixed(1);
-  const demandC = +(item.sDemand * 0.25).toFixed(1);
-  const gapC = +(item.sGap * 0.25).toFixed(1);
-  const spaceC = +(item.sSpace * 0.2).toFixed(1);
-
-  const total = distC + demandC + gapC + spaceC;
+  // 대안 후보(alternatives)는 API가 scoreDetails를 내려주지 않으므로, breakdown 없이 점수만 표시한다.
+  if (!scoreDetails) {
+    return (
+      <span className="text-xs font-bold" style={{ color: NAV, fontFamily: "'JetBrains Mono', monospace" }}>
+        {score}
+      </span>
+    );
+  }
 
   const rows = [
-    { label: "거리 감쇄", weight: "×0.30", raw: (item.fDist * 100).toFixed(1), contrib: `+${distC}`, color: BLUE, bar: distC },
-    { label: "도서 수요도", weight: "×0.25", raw: `${item.sDemand}`, contrib: `+${demandC}`, color: TEAL, bar: demandC },
-    { label: "수급 불일치 해소", weight: "×0.25", raw: `${item.sGap}`, contrib: `+${gapC}`, color: AMBER, bar: gapC },
-    {
-      label: "공간 효율성",
-      weight: "×0.20",
-      raw: item.isSmallLibrary ? `${item.sSpace} (소규모 +15 반영)` : `${item.sSpace}`,
-      contrib: `+${spaceC}`,
-      color: GREEN,
-      bar: spaceC,
-    },
+    { label: "거리 감쇄", weight: "×0.30", contrib: scoreDetails.distanceDecay, color: BLUE },
+    { label: "도서 수요도", weight: "×0.25", contrib: scoreDetails.bookDemand, color: TEAL },
+    { label: "수급 불일치 해소", weight: "×0.25", contrib: scoreDetails.shortageResolution, color: AMBER },
+    { label: "공간 효율성", weight: "×0.20", contrib: scoreDetails.spaceEfficiency, color: GREEN },
   ];
+  const total = rows.reduce((sum, r) => sum + r.contrib, 0);
 
-  // 상단 미니 스택바: 막대 전체 길이가 최종 점수(item.score, 0~100)를 나타내고, 그 길이 안에서 4개 지표의 기여도 비율만큼 색을 나눈다.
-  const scoreCapped = Math.min(100, item.score);
+  // 상단 미니 스택바: 막대 전체 길이가 최종 점수(score, 0~100)를 나타내고, 그 길이 안에서 4개 지표의 기여도 비율만큼 색을 나눈다.
+  const scoreCapped = Math.min(100, score);
   const segments = rows.map((row) => ({
     color: row.color,
-    pct: total > 0 ? (row.bar / total) * scoreCapped : 0,
+    pct: total > 0 ? (row.contrib / total) * scoreCapped : 0,
   }));
 
   const computePosition = () => {
@@ -105,7 +97,7 @@ export function ScoreStackBar({ item }: { item: RelocationItem }) {
           ))}
         </div>
         <span className="text-xs font-bold flex-shrink-0" style={{ color: NAV, fontFamily: "'JetBrains Mono', monospace" }}>
-          {item.score}
+          {score}
         </span>
       </div>
 
@@ -132,24 +124,19 @@ export function ScoreStackBar({ item }: { item: RelocationItem }) {
                     <span className="text-[10px] text-foreground font-medium">{row.label}</span>
                     <span className="text-[9px] text-muted-foreground">{row.weight}</span>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                      {row.raw}
-                    </span>
-                    <span className="text-[10px] font-bold" style={{ color: row.color, fontFamily: "'JetBrains Mono', monospace" }}>
-                      {row.contrib}
-                    </span>
-                  </div>
+                  <span className="text-[10px] font-bold" style={{ color: row.color, fontFamily: "'JetBrains Mono', monospace" }}>
+                    +{row.contrib}
+                  </span>
                 </div>
                 <div className="w-full h-1 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: `${Math.min(row.bar, BAR_VISUAL_CAP)}%`, backgroundColor: row.color, opacity: 0.7 }} />
+                  <div className="h-full rounded-full" style={{ width: `${Math.min(row.contrib, BAR_VISUAL_CAP)}%`, backgroundColor: row.color, opacity: 0.7 }} />
                 </div>
               </div>
             ))}
           </div>
           <div className="mt-2 pt-2 border-t border-border flex items-center justify-between">
             <span className="text-[10px] font-semibold text-foreground">최종 점수</span>
-            <span className="text-xs font-bold" style={{ color: NAV, fontFamily: "'JetBrains Mono', monospace" }}>{item.score}점</span>
+            <span className="text-xs font-bold" style={{ color: NAV, fontFamily: "'JetBrains Mono', monospace" }}>{score}점</span>
           </div>
           <div className="mt-2 flex items-center gap-2 flex-wrap text-[9px] text-muted-foreground">
             <span className="flex items-center gap-1"><span className="w-2 h-1.5 rounded-sm" style={{ backgroundColor: BLUE }} />거리감쇄</span>

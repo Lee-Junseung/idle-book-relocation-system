@@ -50,6 +50,7 @@ export function OverviewPage() {
   const [loanTrendData, setLoanTrendData] = useState<LoanTrendPoint[]>([]);
   const [demographicsData, setDemographicsData] = useState<DemographicPoint[]>([]);
   const [regMembers, setRegMembers] = useState(0);
+  const [district, setDistrict] = useState("");
   const [branches, setBranches] = useState<Branch[]>([]);
   const [hubCollection, setHubCollection] = useState(0);
   const [hubBooksDelta, setHubBooksDelta] = useState(0);
@@ -125,6 +126,7 @@ export function OverviewPage() {
         }));
         setDemographicsData(demo);
         setRegMembers(usersDistribution.data.totalPopulation);
+        setDistrict(usersDistribution.data.districtName);
 
         // 분관 네트워크
         const branchList: Branch[] = libraryNetwork.data.map((b, i) => ({
@@ -320,7 +322,7 @@ export function OverviewPage() {
         <div ref={demoCardRef} className="h-full">
           <Card className="p-3.5 sm:p-4 flex flex-col h-full">
             <h3 className="text-foreground mb-1">지역 연령대 분포</h3>
-            <p className="text-xs text-muted-foreground mb-3">장안구 거주자 기준</p>
+            <p className="text-xs text-muted-foreground mb-3">{district ? `${district} 거주자 기준` : ""}</p>
             <ResponsiveContainer width="100%" height={180}>
               <PieChart>
                 <Pie

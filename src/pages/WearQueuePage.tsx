@@ -3,6 +3,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   ClipboardList, CalendarClock, Search, RefreshCw,
   ChevronUp, ChevronDown, ListFilter, Tag,
+  ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight,
 } from "lucide-react";
 import { Card, SectionHeader, InspectionChecklistModal } from "../components";
 import { NAV } from "../constants/colors";
@@ -43,7 +44,7 @@ export function WearQueuePage({
   const [page, setPage] = useState(0);
   const [pageInfo, setPageInfo] = useState({ totalPages: 1, totalElements: 0 });
 
-  // 최초 진입 시에만 전체 로딩 화면을 보여주고, 이후 페이지 이동/새로고침은 refreshing 표시만으로 처리한다.
+  // OverviewPage와 동일한 형태: 최초 진입 시에만 전체 로딩 화면을 보여주고, 이후 페이지 이동/새로고침은 refreshing 표시만으로 처리한다.
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ChecklistErrorState | null>(null);
   const [saveError, setSaveError] = useState<ChecklistErrorState | null>(null);
@@ -184,8 +185,7 @@ export function WearQueuePage({
       <div className="flex flex-col gap-4">
         <SectionHeader
           title="마모 점검 대상 목록"
-          sub={`점검 리스트 미등록 도서 자동 추출
-          `}>
+          sub={`점검 리스트 미등록 도서 자동 추출`}>
           <button onClick={handleRefresh} disabled={refreshing}
             className="flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium text-white disabled:opacity-60 whitespace-nowrap"
             style={{ backgroundColor: NAV }}>
@@ -295,18 +295,44 @@ export function WearQueuePage({
             </table>
           </div>
           <div className="px-4 py-3 border-t border-border bg-muted/20 flex items-center justify-between flex-wrap gap-2">
-            <span className="text-sm text-muted-foreground">{pageInfo.totalElements}건 중 {queueBooks.length}건 표시 · 유휴화 점수 = (정보 노후도 점수 × 0.3) + (대출 저조도 점수 × 0.4) + (대출 감소도 점수 × 0.3)</span>
-            {pageInfo.totalPages > 1 && (
-              <div className="flex gap-1">
-                {Array.from({ length: pageInfo.totalPages }, (_, i) => i).map((p) => (
-                  <button key={p} onClick={() => goToPage(p)}
-                    className={`w-8 h-8 text-sm rounded border font-medium transition-colors
-                      ${p === page ? "border-primary bg-primary text-white" : "border-border text-muted-foreground hover:bg-muted"}`}>
-                    {p + 1}
+            <span className="text-sm text-muted-foreground">유휴화 점수 = (KDC별 정보 노후도 가중치 X 정보 노후도 점수) + (KDC별 대출 저조도 가중치 X 대출 저조도 점수)</span>
+            {pageInfo.totalPages > 1 && (() => {
+              const WINDOW = 5;
+              const half = Math.floor(WINDOW / 2);
+              let start = Math.max(0, page - half);
+              let end = Math.min(pageInfo.totalPages - 1, start + WINDOW - 1);
+              start = Math.max(0, end - WINDOW + 1);
+              const pages = Array.from({ length: end - start + 1 }, (_, i) => start + i);
+
+              const navBtnClass =
+                "w-8 h-8 flex items-center justify-center rounded border border-border text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors";
+
+              return (
+                <div className="flex gap-1">
+                  <button onClick={() => goToPage(0)} disabled={page === 0} className={navBtnClass} aria-label="처음 페이지">
+                    <ChevronsLeft className="w-3.5 h-3.5" />
                   </button>
-                ))}
-              </div>
-            )}
+                  <button onClick={() => goToPage(page - 1)} disabled={page === 0} className={navBtnClass} aria-label="이전 페이지">
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+
+                  {pages.map((p) => (
+                    <button key={p} onClick={() => goToPage(p)}
+                      className={`w-8 h-8 text-sm rounded border font-medium transition-colors
+            ${p === page ? "border-primary bg-primary text-white" : "border-border text-muted-foreground hover:bg-muted"}`}>
+                      {p + 1}
+                    </button>
+                  ))}
+
+                  <button onClick={() => goToPage(page + 1)} disabled={page === pageInfo.totalPages - 1} className={navBtnClass} aria-label="다음 페이지">
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => goToPage(pageInfo.totalPages - 1)} disabled={page === pageInfo.totalPages - 1} className={navBtnClass} aria-label="끝 페이지">
+                    <ChevronsRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              );
+            })()}
           </div>
         </Card>
       </div>

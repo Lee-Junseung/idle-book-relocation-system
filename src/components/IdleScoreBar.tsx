@@ -12,7 +12,7 @@ const BAR_VISUAL_CAP = 100;
 // 이 컴포넌트에서만 쓰이므로 별도 파일로 분리하지 않음
 const N_MAX = 10;           // Sage 임계 기준 경과 연수 (년)
 const L_TARGET = 2.0;       // Sloan 목표 연평균 대출 횟수 (건/년)
-const DECAY_THRESHOLD = 90; // Sdecay 보조 필터 임계값 (문서 §4)
+const DECAY_THRESHOLD = 90; // Sdecay 보조 필터 임계값
 
 // 공식의 가중치는 더 이상 KDC(장르)별이 아니라 고정값이므로 그대로 사용
 // (전체 점수 자체는 서버가 계산한 idleScore를 그대로 사용하며, 아래 가중치는 툴팁의 "구성 요소 breakdown" 표시용)

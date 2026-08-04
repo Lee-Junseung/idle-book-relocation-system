@@ -33,6 +33,7 @@ export const getDamagePendingCount = (
         ? getDamagePendingCountMock(libraryId)
         : apiGet(`/api/dashboard/damage-pending/count?libraryId=${encodeURIComponent(libraryId)}`);
 
+// libraryId를 요구하지 않는 API들은 그대로 유지
 export const getTransferPendingCount = (): Promise<TransferPendingCountResponse> =>
     USE_MOCK ? getTransferPendingCountMock() : apiGet("/api/dashboard/transfer-pending/count");
 

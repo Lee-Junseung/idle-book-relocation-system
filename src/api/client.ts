@@ -27,7 +27,7 @@ function handleUnauthorized() {
     unauthorizedHandler?.();
 }
 
-// checklistApi.ts처럼 apiGet/apiPost를 거치지 않고 자체 fetch 래퍼를 쓰는 도메인에서도 401 응답 시 동일하게 "세션 삭제 + 로그인 화면 복귀"를 트리거할 수 있도록 노출.
+// api/checklists.ts, api/resultChecklist.ts 등 다른 도메인 파일에서도 401 응답 시 동일하게 "세션 삭제 + 로그인 화면 복귀"를 트리거할 수 있도록 노출.
 export function notifyUnauthorized() {
     handleUnauthorized();
 }
@@ -46,10 +46,11 @@ export class ApiError extends Error {
     }
 }
 
-// 백엔드 응답이 도메인마다 status / statusCode로 필드명이 다를 수 있어 client.ts 레벨에서 방어적으로 둘 다 시도한다. (특정 도메인 타입에 묶이지 않도록 unknown으로 받음)
 function extractStatus(body: unknown, fallback: number): number {
-    const b = body as { status?: number; statusCode?: number } | null;
-    return b?.status ?? b?.statusCode ?? fallback;
+    const b = body as { status?: unknown; statusCode?: unknown } | null;
+    if (typeof b?.statusCode === "number") return b.statusCode;
+    if (typeof b?.status === "number") return b.status;
+    return fallback;
 }
 
 // 응답 실패 시 서버가 4XX, 5XX 응답
@@ -86,6 +87,26 @@ export async function apiGet<T>(path: string): Promise<T> {
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
     const res = await fetch(`${BASE_URL}${path}`, {
         method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify(body),
+    });
+
+    const json = await res.json().catch(() => null);
+
+    if (!res.ok) {
+        const statusCode = extractStatus(json, res.status);
+        if (statusCode === 401) handleUnauthorized();
+        const message = extractMessage(json, path, res.status);
+        throw new ApiError(message, statusCode, extractError(json));
+    }
+
+    return json as T;
+}
+
+// PUT 요청 공통 함수. apiPost와 동일한 규칙으로 에러를 처리한다.
+export async function apiPut<T>(path: string, body: unknown): Promise<T> {
+    const res = await fetch(`${BASE_URL}${path}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify(body),
     });

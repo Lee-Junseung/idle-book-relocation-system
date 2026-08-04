@@ -39,13 +39,8 @@ export function getDotLabel(level: number): string {
   return DOT_LABELS[Math.round(level)] ?? "";
 }
 
-// ------------------------------------------------------------------
 // 마모 점검/이관 판단에 쓰는 기준일 계산 및 월별 대출량 추정 데이터 생성 유틸
-// (원래 src/data/wearUtils.ts에 있던 내용을 이관함 — hashCode는 api/client.ts 것을 재사용)
-// ------------------------------------------------------------------
-
-// 전역 "데이터 기준일" — 이 값이 이 프로젝트에서 기준일을 정의하는 단일 출처(source of truth)이며,
-// App.tsx 헤더에 표시되는 날짜도 이 값에서 파생시켜야 한다.
+// 전역 "데이터 기준일" — 이 값이 이 프로젝트에서 기준일을 정의하는 단일 출처(source of truth)이며, App.tsx 헤더에 표시되는 날짜도 이 값에서 파생시켜야 한다.
 export const DATA_REF_DATE = new Date("2026-07-01");
 
 // dateStr부터 ref까지 경과한 개월 수.
