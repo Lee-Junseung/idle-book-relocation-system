@@ -113,7 +113,8 @@ export function OverviewPage() {
         });
         setLoanTrendData(trend);
         const latestMonth = monthlyLoans.data[monthlyLoans.data.length - 1];
-        setHubCollection(latestMonth?.totalBooks ?? 0);
+        const currentHubCollection = latestMonth?.totalBooks ?? 0;
+        setHubCollection(currentHubCollection);
         setHubBooksDelta(latestMonth?.booksDelta ?? 0);
 
         // 연령대 분포
@@ -128,16 +129,26 @@ export function OverviewPage() {
         setRegMembers(usersDistribution.data.totalPopulation);
         setDistrict(usersDistribution.data.districtName);
 
-        // 분관 네트워크
-        const branchList: Branch[] = libraryNetwork.data.map((b, i) => ({
-          id: `${b.libraryName}-${i}`,
-          name: b.libraryName,
-          district: b.address,
-          collection: b.bookCount,
-          distance: b.length,
-          hub: b.libraryName === CURRENT_LIBRARY.name,
-        }));
-        setBranches(branchList);
+        // 분관 네트워크 (맨 위에 현재 도서관을 HUB로 추가, 도서권수는 상단 카드와 동일한 값 사용)
+        const currentLibraryRow: Branch = {
+          id: "hub",
+          name: CURRENT_LIBRARY.name,
+          district: CURRENT_LIBRARY.address,
+          collection: currentHubCollection,
+          distance: 0,
+          hub: true,
+        };
+        const branchList: Branch[] = libraryNetwork.data
+          .filter((b) => b.libraryName !== CURRENT_LIBRARY.name)
+          .map((b, i) => ({
+            id: `${b.libraryName}-${i}`,
+            name: b.libraryName,
+            district: b.address,
+            collection: b.bookCount,
+            distance: b.length,
+            hub: false,
+          }));
+        setBranches([currentLibraryRow, ...branchList]);
       } catch (e) {
         if (cancelled) return;
         if (e instanceof ApiError) {
@@ -399,17 +410,15 @@ export function OverviewPage() {
                   <span className="text-[11px] font-medium text-foreground whitespace-nowrap" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
                     {b.collection.toLocaleString()}권
                   </span>
-                  {!b.hub && (
-                    <span className="text-[10px] text-muted-foreground whitespace-nowrap" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                      {b.distance}km
-                    </span>
-                  )}
+                  <span className="text-[10px] text-muted-foreground whitespace-nowrap" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                    {b.distance.toFixed(1)}km
+                  </span>
                 </div>
               </div>
             ))}
           </div>
           <p className="text-[10px] text-muted-foreground mt-2 pt-2 border-t border-border">
-            총 {branches.length}개 분관
+            총 {branches.length -1}개 분관
           </p>
         </Card>
       </div>

@@ -1,6 +1,16 @@
 // 마모 점검 대상 도서 목록 조회(GET) / 점검 리스트 등록(POST) / 유휴화 재산정(POST) API의 요청·응답 타입
 export type ChecklistStatus = "DAMAGE_PENDING"; // 추후 다른 상태값이 생기면 union으로 확장
 
+// GET /api/checklists의 sortOrder 쿼리 파라미터 — 유휴화 점수(idleScore) 정렬 기준만 지원
+export type ChecklistSortOrder = "ASC" | "DESC";
+
+// GET /api/checklists 조회 시 서버로 그대로 전달하는 검색/필터/정렬 옵션
+export interface ChecklistListQuery {
+    keyword?: string;
+    genre?: string;
+    sortOrder?: ChecklistSortOrder;
+}
+
 export interface ChecklistPageInfo {
     currentPage: number;
     totalPages: number;

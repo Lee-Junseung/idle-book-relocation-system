@@ -3,6 +3,7 @@
 import { hashCode, mockDelay } from "./client";
 import {
     ChecklistListItem,
+    ChecklistListQuery,
     ChecklistListResponse,
     ChecklistRegisterRequest,
     ChecklistRegisterResponse,
@@ -44,16 +45,35 @@ function buildMockItem(index: number): ChecklistListItem {
 export const getChecklistListApiMock = (
     _status: ChecklistStatus,
     page: number,
-    size: number
+    size: number,
+    query: ChecklistListQuery = {}
 ): Promise<ChecklistListResponse> => {
-    const totalPages = Math.ceil(MOCK_TOTAL_ELEMENTS / size);
+    // 실제 백엔드는 keyword/genre/sortOrder를 전체 데이터 기준으로 적용한 뒤 페이지를 잘라 내려주므로,
+    // mock도 동일하게 "전체 목록 생성 → 필터/정렬 → 페이지 슬라이스" 순서로 흉내낸다.
+    let all = Array.from({ length: MOCK_TOTAL_ELEMENTS }, (_, i) => buildMockItem(i));
+
+    if (query.keyword) {
+        const kw = query.keyword.trim();
+        all = all.filter((b) => b.bookTitle.includes(kw) || b.isbn.includes(kw));
+    }
+    if (query.genre) {
+        all = all.filter((b) => b.genre === query.genre);
+    }
+    if (query.sortOrder) {
+        all = [...all].sort((a, b) =>
+            query.sortOrder === "ASC" ? a.idleScore - b.idleScore : b.idleScore - a.idleScore
+        );
+    }
+
+    const totalElements = all.length;
+    const totalPages = Math.max(1, Math.ceil(totalElements / size));
     const start = page * size;
-    const end = Math.min(start + size, MOCK_TOTAL_ELEMENTS);
-    const data = Array.from({ length: Math.max(0, end - start) }, (_, i) => buildMockItem(start + i));
+    const end = Math.min(start + size, totalElements);
+    const data = all.slice(start, end);
 
     return mockDelay({
         success: true,
-        pageInfo: { currentPage: page, totalPages, totalElements: MOCK_TOTAL_ELEMENTS },
+        pageInfo: { currentPage: page, totalPages, totalElements },
         data,
     });
 };

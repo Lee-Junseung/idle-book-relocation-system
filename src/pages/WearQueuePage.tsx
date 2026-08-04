@@ -1,5 +1,5 @@
 // 유휴화 점수 산정 도서 중 점검 리스트가 등록되지 않은 도서 목록을 보여주고, 점검 리스트 등록을 시작하는 페이지
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   ClipboardList, CalendarClock, Search, RefreshCw,
   ChevronUp, ChevronDown, ListFilter, Tag,
@@ -9,7 +9,7 @@ import { Card, SectionHeader, InspectionChecklistModal } from "../components";
 import { NAV } from "../constants/colors";
 import { IdleScoreBar } from "../components/IdleScoreBar";
 import { Book, DamageInspection } from "../types";
-import type { ChecklistErrorState } from "../types/checklists";
+import type { ChecklistErrorState, ChecklistSortOrder } from "../types/checklists";
 import { averageScore, clampToScore } from "../constants/checklistItems";
 import {
   getChecklistListApi,
@@ -22,7 +22,15 @@ import { ApiError } from "../api/client";
 
 const PAGE_SIZE = 10;
 
-type SortKey = "title" | "genre" | "idleScore";
+// 검색/장르/정렬 변경 시 재조회를 얼마나 늦출지 (타이핑마다 요청이 나가지 않도록)
+const FILTER_DEBOUNCE_MS = 400;
+
+// GET /api/checklists의 genre 파라미터는 자유 텍스트가 아니라 KDC 대분류 값을 그대로 받으므로,
+// (전체 목록이 아니라) 현재 페이지에 실린 도서에서만 뽑던 기존 방식 대신 KDC 10개 대분류를 고정 목록으로 사용한다.
+const KDC_GENRES = [
+  "총류", "철학", "종교", "사회과학", "자연과학",
+  "기술과학", "예술", "언어", "문학", "역사",
+];
 
 export function WearQueuePage({
   books, setBooks, inspections, setInspections, inspectorName, librarianCode,
@@ -37,8 +45,8 @@ export function WearQueuePage({
   const [checklistTarget, setChecklistTarget] = useState<Book | null>(null);
   const [search, setSearch] = useState("");
   const [genreFilter, setGenreFilter] = useState("전체 장르");
-  const [sortKey, setSortKey] = useState<SortKey | null>(null);
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  // 백엔드가 유휴화 점수(idleScore) 정렬만 지원하므로(ASC/DESC), 제목/장르 정렬은 지원하지 않는다.
+  const [sortOrder, setSortOrder] = useState<ChecklistSortOrder | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [page, setPage] = useState(0);
@@ -49,12 +57,18 @@ export function WearQueuePage({
   const [error, setError] = useState<ChecklistErrorState | null>(null);
   const [saveError, setSaveError] = useState<ChecklistErrorState | null>(null);
 
-  // 도서 리스트 조회 (GET /api/checklists?status=DAMAGE_PENDING&page=&size=)
-  // 서버가 "해당 지점 + 점검 미등록(DAMAGE_PENDING)" 조건을 이미 필터링해서 내려주므로 프론트에서 branch/inspection 상태를 다시 거를 필요 없음
+  // 도서 리스트 조회 (GET /api/checklists?status=DAMAGE_PENDING&keyword=&genre=&sortOrder=&page=&size=)
+  // 서버가 "해당 지점 + 점검 미등록(DAMAGE_PENDING)" 조건을 이미 필터링해서 내려주므로 프론트에서 branch/inspection 상태를 다시 거를 필요 없음.
+  // 검색(keyword)/장르(genre)/정렬(sortOrder)도 서버로 그대로 전달해서 전체 데이터 기준으로 처리한다 —
+  // 클라이언트에서 다시 거르면 현재 페이지(10건) 안에서만 동작하는 문제가 생기기 때문.
   const fetchQueueBooks = useCallback(async (targetPage = 0) => {
     setError(null);
     try {
-      const json = await getChecklistListApi("DAMAGE_PENDING", targetPage, PAGE_SIZE);
+      const json = await getChecklistListApi("DAMAGE_PENDING", targetPage, PAGE_SIZE, {
+        keyword: search.trim() || undefined,
+        genre: genreFilter === "전체 장르" ? undefined : genreFilter,
+        sortOrder: sortOrder ?? undefined,
+      });
       setBooks(json.data.map(mapToBook));
       setPageInfo({ totalPages: json.pageInfo.totalPages, totalElements: json.pageInfo.totalElements });
       setPage(json.pageInfo.currentPage);
@@ -67,9 +81,19 @@ export function WearQueuePage({
     } finally {
       setLoading(false);
     }
-  }, [setBooks]);
+  }, [setBooks, search, genreFilter, sortOrder]);
 
-  useEffect(() => { fetchQueueBooks(0); }, [fetchQueueBooks]);
+  // 최초 진입 시 1회 조회
+  useEffect(() => { fetchQueueBooks(0); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 검색어 / 장르 / 정렬이 바뀌면 1페이지부터 다시 조회 (검색은 타이핑 중 매 요청을 막기 위해 디바운스)
+  const isFirstFilterRun = useRef(true);
+  useEffect(() => {
+    if (isFirstFilterRun.current) { isFirstFilterRun.current = false; return; }
+    const timer = setTimeout(() => { fetchQueueBooks(0); }, FILTER_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, genreFilter, sortOrder]);
 
   // 유휴화 도서 새로고침 (POST /api/checklists/idle-classify → 목록 재조회)
   // idle-classify로 서버 측 재산정을 먼저 수행한 뒤, 갱신된 결과를 1페이지부터 다시 불러온다.
@@ -97,37 +121,21 @@ export function WearQueuePage({
     fetchQueueBooks(p);
   };
 
-  // 서버가 이미 지점+상태로 필터링해서 내려주므로 baseQueueBooks는 books를 그대로 사용
-  const baseQueueBooks = books;
-  const genres = ["전체 장르", ...Array.from(new Set(books.map((b) => b.genre)))];
+  // 서버가 이미 지점+상태+검색어+장르+정렬까지 전부 반영해서 내려주므로 화면에는 books를 그대로 사용
+  const queueBooks = books;
+  const genres = ["전체 장르", ...KDC_GENRES];
 
-  const queueBooks = useMemo(() => {
-    let list = baseQueueBooks.filter((b) =>
-      (search === "" || b.title.includes(search) || b.isbn.includes(search)) &&
-      (genreFilter === "전체 장르" || b.genre === genreFilter)
-    );
-
-    // 정렬 기준이 없으면 서버(유휴화 점수 API)가 내려준 순서를 그대로 사용
-    if (!sortKey) return list;
-
-    return [...list].sort((a, b2) => {
-      let av: string | number, bv: string | number;
-      if (sortKey === "idleScore") { av = a.idleScore ?? 0; bv = b2.idleScore ?? 0; }
-      else { av = a[sortKey]; bv = b2[sortKey]; }
-      if (av === bv) return 0;
-      return sortDir === "asc" ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
-    });
-  }, [baseQueueBooks, search, genreFilter, sortKey, sortDir]);
-
-  const toggleSort = (k: SortKey) => {
-    if (sortKey === k) setSortDir((d) => d === "asc" ? "desc" : "asc");
-    else { setSortKey(k); setSortDir("desc"); }
+  // 유휴화 점수 정렬만 지원 (제목/장르 정렬은 백엔드가 지원하지 않아 제거)
+  const toggleIdleScoreSort = () => {
+    setSortOrder((prev) => (prev === "DESC" ? "ASC" : "DESC"));
   };
 
-  const SortIcon = ({ k }: { k: SortKey }) =>
-    sortKey === k
-      ? (sortDir === "desc" ? <ChevronDown className="w-3.5 h-3.5 text-primary" /> : <ChevronUp className="w-3.5 h-3.5 text-primary" />)
-      : <ChevronDown className="w-3.5 h-3.5 opacity-25" />;
+  const IdleScoreSortIcon = () =>
+    sortOrder === null
+      ? <ChevronDown className="w-3.5 h-3.5 opacity-25" />
+      : sortOrder === "DESC"
+        ? <ChevronDown className="w-3.5 h-3.5 text-primary" />
+        : <ChevronUp className="w-3.5 h-3.5 text-primary" />;
 
   // 점검 리스트 등록 (POST /api/checklists/results)
   const handleChecklistSave = async (insp: DamageInspection) => {
@@ -248,17 +256,15 @@ export function WearQueuePage({
             <table className="w-full">
               <thead className="bg-muted/40">
                 <tr className="border-b border-border">
-                  <th onClick={() => toggleSort("title")}
-                    className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap cursor-pointer select-none">
-                    <span className="flex items-center gap-1">제목 / 저자<SortIcon k="title" /></span>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">
+                    제목 / 저자
                   </th>
-                  <th onClick={() => toggleSort("genre")}
-                    className="hidden md:table-cell px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap cursor-pointer select-none">
-                    <span className="flex items-center gap-1">장르<SortIcon k="genre" /></span>
+                  <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">
+                    장르
                   </th>
-                  <th onClick={() => toggleSort("idleScore")}
+                  <th onClick={toggleIdleScoreSort}
                     className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap cursor-pointer select-none">
-                    <span className="flex items-center gap-1">유휴화 점수<SortIcon k="idleScore" /></span>
+                    <span className="flex items-center gap-1">유휴화 점수<IdleScoreSortIcon /></span>
                   </th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">점검 리스트</th>
                 </tr>
@@ -286,7 +292,7 @@ export function WearQueuePage({
                 {queueBooks.length === 0 && (
                   <tr><td colSpan={4} className="py-16 text-center text-sm text-muted-foreground">
                     <CalendarClock className="w-5 h-5 mx-auto mb-2 opacity-40" />
-                    {baseQueueBooks.length === 0
+                    {search === "" && genreFilter === "전체 장르"
                       ? "현재 점검이 필요한 도서가 없습니다. 모든 대상 도서의 점검 리스트가 등록되었습니다."
                       : "검색 조건에 해당하는 도서가 없습니다."}
                   </td></tr>
