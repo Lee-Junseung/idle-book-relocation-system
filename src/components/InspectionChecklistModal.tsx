@@ -30,11 +30,12 @@ function toScores(initial?: DamageInspection): Scores {
 }
 
 export function InspectionChecklistModal({
-  book, initial, inspectorDefault, onClose, onSave,
+  book, initial, inspectorDefault, saving, onClose, onSave,
 }: {
   book: Book;
   initial?: DamageInspection;
   inspectorDefault?: string;
+  saving?: boolean;
   onClose: () => void;
   onSave: (insp: DamageInspection) => void;
 }) {
@@ -177,10 +178,10 @@ export function InspectionChecklistModal({
             className="px-4 py-2.5 rounded-md border border-border text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
             취소
           </button>
-          <button onClick={handleSave} disabled={!inspector.trim() || !allAnswered}
+          <button onClick={handleSave} disabled={!inspector.trim() || !allAnswered || saving}
             className="flex items-center gap-1.5 px-5 py-2.5 rounded-md text-sm font-semibold text-white transition-opacity hover:opacity-85 disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ backgroundColor: NAV }}>
-            <Save className="w-4 h-4" /> {initial ? "수정 저장" : "등록"}
+            <Save className="w-4 h-4" /> {saving ? "저장 중…" : initial ? "수정 저장" : "등록"}
           </button>
         </div>
       </div>

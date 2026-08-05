@@ -73,7 +73,7 @@ const BRANCHES: BranchRaw[] = [
 ];
 
 // libraryId별 mock 테이블
-// 지금은 북수원도서관(CURRENT_LIBRARY.id) 하나만 등록되어 있지만, 확장 시 다른 도서관 id를 키로 추가하면 그대로 동작한다.
+// 지금은 (CURRENT_LIBRARY.id) 하나만 등록되어 있지만, 확장 시 다른 도서관 id를 키로 추가하면 그대로 동작한다.
 const MOCK_DATA_BY_LIBRARY: Record<
     LibraryId,
     {

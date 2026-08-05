@@ -1,9 +1,8 @@
 // WearManagePage 전용 "점검리스트 수정" 모달.
 // WearQueuePage의 InspectionChecklistModal(신규 등록)과 UI는 비슷하지만 입력 소스가 다르다:
-// - InspectionChecklistModal은 세션 내 로컬 상태(inspections)에서 initial 값을 받는다 (신규 등록 직후에만 값이 있음).
-// - 이 컴포넌트는 서버에서 실제로 받아온 점검 상세(BookDetailResult.checkResults)를 그대로 화면 척도(1~5)로
-//   환산해 채운다. WearManagePage에 로드된 도서는 대부분 "이전 세션/다른 사서"가 등록한 것이라 로컬 상태에
-//   해당 값이 없는 게 정상이므로, 항상 서버 데이터를 단일 출처로 사용해야 값이 비어보이는 문제가 없다.
+// InspectionChecklistModal은 세션 내 로컬 상태(inspections)에서 initial 값을 받는다 (신규 등록 직후에만 값이 있음).
+// 이 컴포넌트는 서버에서 실제로 받아온 점검 상세(BookDetailResult.checkResults)를 그대로 화면 척도(1~5)로 환산해 채운다.
+// WearManagePage에 로드된 도서는 대부분 "이전 세션/다른 사서"가 등록한 것이라 로컬 상태에 해당 값이 없는 게 정상이므로, 항상 서버 데이터를 단일 출처로 사용해야 값이 비어보이는 문제가 없다.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { X, ClipboardList, Save } from "lucide-react";
 import { NAV } from "../constants/colors";
@@ -29,9 +28,8 @@ const KEY_BY_CHECK_ITEM_ID: Record<number, InspKey> = Object.fromEntries(
   INSP_ITEMS_FLAT.map(({ key, checkItemId }) => [checkItemId, key])
 );
 
-// 서버가 내려주는 itemScore는 문항별 만점(maxScore) 기준 점수이므로, 화면의 1~5 척도로 환산해야
-// 버튼 UI(항상 1~5)에 그대로 채울 수 있다. WearManagePage.handleChecklistSave가 저장할 때 쓰는
-// "value/5 * maxScore" 변환의 역연산이다.
+// 서버가 내려주는 itemScore는 문항별 만점(maxScore) 기준 점수이므로, 화면의 1~5 척도로 환산해야 버튼 UI(항상 1~5)에 그대로 채울 수 있다.
+// WearManagePage.handleChecklistSave가 저장할 때 쓰는 "value/5 * maxScore" 변환의 역연산이다.
 function toScoresFromDetail(
   detail: BookDetailResult,
   checkItemMaster: Record<number, CheckItemMaster>

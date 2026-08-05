@@ -79,7 +79,7 @@ export function mapCompletedItemToBook(
 }
 
 // 도서 상세 조회 (최근 1건) (GET /api/checklists/books/{bookId}/results)
-//v이 엔드포인트도 래핑 없이 객체를 그대로 반환합니다.
+// 이 엔드포인트도 래핑 없이 객체를 그대로 반환합니다.
 export const getBookDetailApi = (bookId: number): Promise<BookDetailResult> =>
     USE_MOCK
         ? getBookDetailApiMock(bookId)

@@ -8,7 +8,6 @@ export function DamageDot({ level }: { level: number }) {
     <div className="flex items-center gap-1.5">
       <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
       <span className="text-xs font-medium" style={{ color }}>{label}</span>
-      <span className="text-[11px] text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace" }}>({level}/5)</span>
     </div>
   );
 }
