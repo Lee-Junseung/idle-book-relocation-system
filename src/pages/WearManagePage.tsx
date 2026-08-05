@@ -632,7 +632,7 @@ export function WearManagePage({
                                         disabled={detailLoading || !!detailError || !bookDetail}
                                         className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded border transition-colors hover:bg-muted/40 disabled:opacity-40 disabled:cursor-not-allowed"
                                         style={{ borderColor: withAlpha(NAV, 0.25), color: NAV }}>
-                                        <ClipboardEdit className="w-3.5 h-3.5" /> 점검리스트 수정
+                                        <ClipboardEdit className="w-3.5 h-3.5" /> 점검 수정
                                       </button>
                                     </div>
                                     <div className="flex items-center gap-2 mb-2">

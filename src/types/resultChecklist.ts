@@ -8,7 +8,7 @@ export interface ApiEnvelope<T> {
 // 도서 상태 (백엔드 원본 값).
 // 화면에서 쓰는 "폐기/이관/보존 결정" 상태(BookStatus)와는 별개의 개념입니다.
 // NORMAL: 정상 / IDLE: 유휴(장기 미대출 등) / IN_PROGRESS: 점검 진행중 / DISCARDED: 폐기 완료
-export type ApiBookStatus = "NORMAL" | "IDLE" | "IN_PROGRESS" | "DISCARDED" | "RELOCATED" | "KEPT";
+export type ApiBookStatus = "NORMAL" | "IDLE" | "IN_PROGRESS" | "DISCARDED" | "TRANSFERRED" | "PRESERVED";
 
 // 점검 완료 도서 전체 목록 조회
 // GET /api/checklists/results/completed

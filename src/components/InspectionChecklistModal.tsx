@@ -98,7 +98,7 @@ export function InspectionChecklistModal({
               <ClipboardList className="w-4 h-4" style={{ color: NAV }} />
             </div>
             <div className="min-w-0">
-              <h3 id="inspection-modal-title" className="text-base font-semibold text-foreground">{initial ? "마모 점검 리스트 수정" : "마모 점검 리스트 등록"}</h3>
+              <h3 id="inspection-modal-title" className="text-base font-semibold text-foreground">점검 리스트 등록</h3>
               <p className="text-sm text-muted-foreground truncate">{book.title} <span className="text-muted-foreground/70">— {book.id}</span></p>
             </div>
           </div>

@@ -50,8 +50,8 @@ export function scoreToDamage(totalScore: number): 1 | 2 | 3 | 4 | 5 {
 export function apiStatusToBookStatus(status: ApiBookStatus): BookStatus {
     switch (status) {
         case "DISCARDED": return "폐기승인";
-        case "RELOCATED": return "이관승인";
-        case "KEPT": return "보존결정";
+        case "TRANSFERRED": return "이관승인";
+        case "PRESERVED": return "보존결정";
         default: return "대기";
     }
 }
