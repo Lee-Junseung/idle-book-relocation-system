@@ -23,14 +23,15 @@ export const getChecklistListApi = (
     status: ChecklistStatus,
     page: number,
     size: number,
-    query: ChecklistListQuery = {}
+    query: ChecklistListQuery = {},
+    signal?: AbortSignal
 ): Promise<ChecklistListResponse> => {
     if (USE_MOCK) return getChecklistListApiMock(status, page, size, query);
     const params = new URLSearchParams({ status, page: String(page), size: String(size) });
     if (query.keyword) params.set("keyword", query.keyword);
     if (query.genre) params.set("genre", query.genre);
     if (query.sortOrder) params.set("sortOrder", query.sortOrder);
-    return apiGet<ChecklistListResponse>(`/api/checklists?${params.toString()}`);
+    return apiGet<ChecklistListResponse>(`/api/checklists?${params.toString()}`, signal);
 };
 
 export function mapToBook(item: ChecklistListItem): Book {

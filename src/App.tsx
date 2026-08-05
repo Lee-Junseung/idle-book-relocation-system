@@ -274,7 +274,7 @@ export default function App() {
 
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6">
           {page === "overview" && <OverviewPage />}
-          {page === "wear-queue" && <WearQueuePage books={books} setBooks={setBooks} inspections={inspections} setInspections={setInspections} inspectorName={session.name} librarianCode={session.librarianId} />}
+          {page === "wear-queue" && <WearQueuePage books={books} setBooks={setBooks} inspections={inspections} setInspections={setInspections} inspectorName={session.name} librarianCode={session.librarianId} setActivePage={setPage} />}
           {page === "wear-manage" && <WearManagePage books={books} setBooks={setBooks} inspections={inspections} setInspections={setInspections} inspectorName={session.name} />}
           {page === "relocation" && <RelocationPage />}
         </main>

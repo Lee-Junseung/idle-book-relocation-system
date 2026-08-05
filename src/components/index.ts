@@ -10,4 +10,5 @@ export * from "./DemandTag";
 export * from "./ChartTooltip";
 export * from "./ConfirmModal";
 export * from "./InspectionChecklistModal";
+export * from "./ChecklistEditModal";
 export * from "./lib";

@@ -4,11 +4,11 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import {
   Trash2, MoveRight, BookMarked,
   ChevronUp, ChevronDown, Check, Clock, ListFilter,
-  X, Search, ClipboardEdit, Tag, Loader2, AlertTriangle, History,
+  X, Search, ClipboardEdit, Tag, Loader2, AlertTriangle,
   ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight,
 } from "lucide-react";
 
-import { Card, SectionHeader, DamageDot, DamageTooltipCell, ConfirmModal, InspectionChecklistModal, withAlpha, getDotColor, getDotLabel } from "../components";
+import { Card, SectionHeader, DamageDot, DamageTooltipCell, ConfirmModal, ChecklistEditModal, withAlpha, getDotColor, getDotLabel } from "../components";
 import { NAV, GREEN, RED, PURPLE, AMBER } from "../constants/colors";
 import { BOOK_LOAN_HISTORY, BOOK_DAMAGE_REASON } from "../constants/bookDemoData";
 import { INSP_ITEMS_FLAT, averageScore, clampToScore } from "../constants/checklistItems";
@@ -17,7 +17,6 @@ import { Book, BookStatus, DamageInspection, ModalConfig } from "../types";
 import {
   getCompletedChecklistsApi,
   getBookDetailApi,
-  getBookHistoryApi,
   updateChecklistResultApi,
   getCheckItemsApi,
   confirmDecisionApi,
@@ -27,7 +26,6 @@ import {
 import { ApiError } from "../api/client";
 import {
   BookDetailResult,
-  ChecklistHistoryEntry,
   UpdateCheckResultInput,
   CheckItemMaster,
 } from "../types/resultChecklist";
@@ -140,35 +138,6 @@ export function WearManagePage({
       })
       .finally(() => setDetailLoading(false));
   }, [panelBook]);
-
-  // 전체 점검 이력 (4번, 버튼 클릭 시 조회)
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyError, setHistoryError] = useState<string | null>(null);
-  const [historyEntries, setHistoryEntries] = useState<ChecklistHistoryEntry[]>([]);
-
-  useEffect(() => {
-    // 도서(패널) 전환 시 이력 패널은 접힌 상태로 초기화
-    setHistoryOpen(false);
-    setHistoryError(null);
-    setHistoryEntries([]);
-  }, [panelBook]);
-
-  const toggleHistory = (bookId: string) => {
-    if (historyOpen) { setHistoryOpen(false); return; }
-    setHistoryOpen(true);
-    setHistoryLoading(true);
-    setHistoryError(null);
-    getBookHistoryApi(Number(bookId))
-      .then((entries) => setHistoryEntries(entries))
-      .catch((err: unknown) => {
-        const message =
-          err instanceof ApiError ? err.message : "점검 이력을 불러오지 못했습니다.";
-        setHistoryError(message);
-        setHistoryEntries([]);
-      })
-      .finally(() => setHistoryLoading(false));
-  };
 
   const inspectedBooks = books.filter((b) => !!inspections[b.id] || !!resultBatchByBookId[b.id]);
 
@@ -416,10 +385,13 @@ export function WearManagePage({
   return (
     <>
       {modal && <ConfirmModal config={modal} onClose={() => setModal(null)} />}
-      {checklistTarget && (
-        <InspectionChecklistModal
+      {/* bookDetail은 항상 checklistTarget과 같은 도서(panelBook)의 상세 데이터이므로 그대로 사용 가능.
+          아직 로딩 중이거나 실패한 상태에서는 "점검리스트 수정" 버튼 자체를 막아두므로(disabled) 여기 도달하지 않음. */}
+      {checklistTarget && bookDetail && (
+        <ChecklistEditModal
           book={checklistTarget}
-          initial={inspections[checklistTarget.id]}
+          detail={bookDetail}
+          checkItemMaster={checkItemMaster}
           inspectorDefault={inspectorName}
           onClose={() => setChecklistTarget(null)}
           onSave={handleChecklistSave}
@@ -635,12 +607,12 @@ export function WearManagePage({
                                     <p className="text-sm font-semibold text-foreground mb-2">최근 12개월 월별 대출 추이</p>
                                     <div className="h-48 sm:h-56">
                                       <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart data={bMonthlyData} margin={{ top: 4, right: 4, bottom: 2, left: -8 }}>
+                                        <LineChart data={bMonthlyData} margin={{ top: 4, right: 12, bottom: 2, left: 0 }}>
                                           <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
                                           <XAxis dataKey="month"
                                             tick={{ fontSize: 10, fill: "#9CA3AF", fontFamily: "'JetBrains Mono', monospace" }}
                                             axisLine={false} tickLine={false} />
-                                          <YAxis
+                                          <YAxis width={28}
                                             tick={{ fontSize: 10, fill: "#9CA3AF", fontFamily: "'JetBrains Mono', monospace" }}
                                             axisLine={false} tickLine={false}
                                             domain={[0, "dataMax + 1"]} allowDecimals={false} />
@@ -661,7 +633,8 @@ export function WearManagePage({
                                     <div className="flex items-center justify-between mb-2 gap-2">
                                       <p className="text-sm font-semibold text-foreground">마모 판단 근거</p>
                                       <button onClick={(e) => { e.stopPropagation(); setChecklistTarget(book); }}
-                                        className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded border transition-colors hover:bg-muted/40"
+                                        disabled={detailLoading || !!detailError || !bookDetail}
+                                        className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded border transition-colors hover:bg-muted/40 disabled:opacity-40 disabled:cursor-not-allowed"
                                         style={{ borderColor: withAlpha(NAV, 0.25), color: NAV }}>
                                         <ClipboardEdit className="w-3.5 h-3.5" /> 점검리스트 수정
                                       </button>
@@ -701,49 +674,6 @@ export function WearManagePage({
                                       </div>
                                     ) : (
                                       <p className="text-sm text-muted-foreground italic pt-2 border-t border-border">세부 심사 데이터 없음</p>
-                                    )}
-
-                                    <button
-                                      onClick={(e) => { e.stopPropagation(); toggleHistory(book.id); }}
-                                      className="flex items-center gap-1 text-xs font-medium mt-3 pt-2 border-t border-border transition-colors hover:opacity-70"
-                                      style={{ color: NAV }}>
-                                      <History className="w-3.5 h-3.5" />
-                                      {historyOpen ? "전체 이력 접기" : "전체 점검 이력 보기"}
-                                      {historyOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                                    </button>
-
-                                    {historyOpen && (
-                                      <div className="mt-2 flex flex-col gap-1.5 max-h-40 overflow-y-auto pr-1">
-                                        {historyLoading ? (
-                                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                            <Loader2 className="w-3.5 h-3.5 animate-spin" /> 이력 불러오는 중…
-                                          </div>
-                                        ) : historyError ? (
-                                          <p className="text-xs" style={{ color: RED }}>{historyError}</p>
-                                        ) : historyEntries.length === 0 ? (
-                                          <p className="text-xs text-muted-foreground italic">이전 점검 이력이 없습니다.</p>
-                                        ) : (
-                                          historyEntries.map((entry) => {
-                                            const failCount = entry.items.filter((i) => !i.isPassed).length;
-                                            return (
-                                              <div key={entry.resultBatchId}
-                                                className="flex items-center justify-between gap-2 px-2 py-1.5 rounded border border-border bg-muted/20">
-                                                <div className="flex flex-col min-w-0">
-                                                  <span className="text-xs text-foreground font-medium" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                                                    {entry.checkedDate}
-                                                  </span>
-                                                  <span className="text-xs text-muted-foreground truncate">
-                                                    담당 {entry.librarianCode} · 이상항목 {failCount}건
-                                                  </span>
-                                                </div>
-                                                <span className="text-xs font-bold flex-shrink-0" style={{ color: NAV, fontFamily: "'JetBrains Mono', monospace" }}>
-                                                  {entry.totalScore}점
-                                                </span>
-                                              </div>
-                                            );
-                                          })
-                                        )}
-                                      </div>
                                     )}
                                   </div>
                                 </div>

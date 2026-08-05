@@ -2,14 +2,14 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   ClipboardList, CalendarClock, Search, RefreshCw,
-  ChevronUp, ChevronDown, ListFilter, Tag,
+  ChevronUp, ChevronDown, ListFilter, Tag, Loader2,
   ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight,
 } from "lucide-react";
 import { Card, SectionHeader, InspectionChecklistModal } from "../components";
 import { NAV } from "../constants/colors";
 import { IdleScoreBar } from "../components/IdleScoreBar";
 import { Book, DamageInspection } from "../types";
-import type { ChecklistErrorState, ChecklistSortOrder } from "../types/checklists";
+import type { ChecklistErrorState, ChecklistListResponse, ChecklistSortOrder } from "../types/checklists";
 import { averageScore, clampToScore } from "../constants/checklistItems";
 import {
   getChecklistListApi,
@@ -19,11 +19,26 @@ import {
   classifyIdleBooksApi,
 } from "../api/checklists";
 import { ApiError } from "../api/client";
+import type { PageId } from "../types";
 
 const PAGE_SIZE = 10;
 
-// 검색/장르/정렬 변경 시 재조회를 얼마나 늦출지 (타이핑마다 요청이 나가지 않도록)
-const FILTER_DEBOUNCE_MS = 400;
+// 검색(타이핑)에만 적용하는 디바운스. 장르/정렬은 클릭 한 번으로 값이 바로 확정되는 액션이라
+// 굳이 기다릴 필요가 없어서 별도로 분리하고 즉시 조회한다 (예전엔 셋 다 400ms를 기다렸음).
+const SEARCH_DEBOUNCE_MS = 300;
+
+// 조회 결과 캐시. 컴포넌트 바깥(모듈 스코프)에 둬서 WearManagePage 등 다른 화면에 갔다가
+// 다시 돌아와도 유지된다. 페이지/검색어/장르/정렬 조합을 키로 마지막 응답을 저장해두고,
+// 같은 조합을 다시 조회할 때는 네트워크 응답을 기다리지 않고 캐시를 먼저 화면에 보여준 뒤
+// (stale-while-revalidate) 최신 데이터가 도착하면 조용히 교체한다.
+// "유휴화 도서 새로고침"을 누르면 실제 데이터가 바뀌므로 전체 무효화한다.
+const queueListCache = new Map<string, ChecklistListResponse>();
+const buildQueueCacheKey = (
+  targetPage: number,
+  keyword: string,
+  genre: string,
+  sortOrder: ChecklistSortOrder | null
+) => `${targetPage}|${keyword}|${genre}|${sortOrder ?? ""}`;
 
 // GET /api/checklists의 genre 파라미터는 자유 텍스트가 아니라 KDC 대분류 값을 그대로 받으므로,
 // (전체 목록이 아니라) 현재 페이지에 실린 도서에서만 뽑던 기존 방식 대신 KDC 10개 대분류를 고정 목록으로 사용한다.
@@ -33,7 +48,7 @@ const KDC_GENRES = [
 ];
 
 export function WearQueuePage({
-  books, setBooks, inspections, setInspections, inspectorName, librarianCode,
+  books, setBooks, inspections, setInspections, inspectorName, librarianCode, setActivePage,
 }: {
   books: Book[];
   setBooks: React.Dispatch<React.SetStateAction<Book[]>>;
@@ -41,6 +56,9 @@ export function WearQueuePage({
   setInspections: React.Dispatch<React.SetStateAction<Record<string, DamageInspection>>>;
   inspectorName?: string;
   librarianCode: string; // 로그인 세션의 사서 코드 — 점검 리스트 등록 요청(librarianCode)에 사용
+  // 등록 성공 시 WearManagePage("wear-manage")로 이동시키기 위함.
+  // 아래 페이지네이션용 로컬 상태(page/setPage)와 이름이 겹치지 않도록 setActivePage로 명명.
+  setActivePage: React.Dispatch<React.SetStateAction<PageId>>;
 }) {
   const [checklistTarget, setChecklistTarget] = useState<Book | null>(null);
   const [search, setSearch] = useState("");
@@ -52,10 +70,16 @@ export function WearQueuePage({
   const [page, setPage] = useState(0);
   const [pageInfo, setPageInfo] = useState({ totalPages: 1, totalElements: 0 });
 
-  // OverviewPage와 동일한 형태: 최초 진입 시에만 전체 로딩 화면을 보여주고, 이후 페이지 이동/새로고침은 refreshing 표시만으로 처리한다.
+  // 최초 진입 시에만 전체 화면 로딩을 보여주고, 이후 페이지 이동/필터/검색은
+  // tableLoading(테이블 위 오버레이)만으로 표시해서 화면이 완전히 비지 않게 한다.
   const [loading, setLoading] = useState(true);
+  const [tableLoading, setTableLoading] = useState(false);
   const [error, setError] = useState<ChecklistErrorState | null>(null);
   const [saveError, setSaveError] = useState<ChecklistErrorState | null>(null);
+
+  // 진행 중인 조회 요청 추적용. 새 요청(페이지 이동/필터 변경 등)이 시작되면 이전 요청은 취소해서,
+  // 느린 이전 응답이 나중에 도착해 최신 화면을 덮어써버리는 경쟁 상태(예: 페이지 버튼 빠르게 연타)를 막는다.
+  const abortRef = useRef<AbortController | null>(null);
 
   // 도서 리스트 조회 (GET /api/checklists?status=DAMAGE_PENDING&keyword=&genre=&sortOrder=&page=&size=)
   // 서버가 "해당 지점 + 점검 미등록(DAMAGE_PENDING)" 조건을 이미 필터링해서 내려주므로 프론트에서 branch/inspection 상태를 다시 거를 필요 없음.
@@ -63,16 +87,39 @@ export function WearQueuePage({
   // 클라이언트에서 다시 거르면 현재 페이지(10건) 안에서만 동작하는 문제가 생기기 때문.
   const fetchQueueBooks = useCallback(async (targetPage = 0) => {
     setError(null);
+    const keyword = search.trim();
+    const genre = genreFilter === "전체 장르" ? "" : genreFilter;
+    const cacheKey = buildQueueCacheKey(targetPage, keyword, genre, sortOrder);
+    const cached = queueListCache.get(cacheKey);
+
+    // 캐시가 있으면 네트워크 응답을 기다리지 않고 먼저 화면에 반영한다 (stale-while-revalidate).
+    // 아래에서 실제 최신 응답이 오면 다시 한 번 덮어써서 항상 최신 상태로 맞춘다.
+    if (cached) {
+      setBooks(cached.data.map(mapToBook));
+      setPageInfo({ totalPages: cached.pageInfo.totalPages, totalElements: cached.pageInfo.totalElements });
+      setPage(cached.pageInfo.currentPage);
+      setLoading(false);
+    } else {
+      setTableLoading(true);
+    }
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
       const json = await getChecklistListApi("DAMAGE_PENDING", targetPage, PAGE_SIZE, {
-        keyword: search.trim() || undefined,
-        genre: genreFilter === "전체 장르" ? undefined : genreFilter,
+        keyword: keyword || undefined,
+        genre: genre || undefined,
         sortOrder: sortOrder ?? undefined,
-      });
+      }, controller.signal);
+
+      queueListCache.set(cacheKey, json);
       setBooks(json.data.map(mapToBook));
       setPageInfo({ totalPages: json.pageInfo.totalPages, totalElements: json.pageInfo.totalElements });
       setPage(json.pageInfo.currentPage);
     } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return; // 취소된 요청 — 더 최신 요청이 대신 처리 중이므로 무시
       if (e instanceof ApiError) {
         setError({ message: e.message, errorType: e.error, statusCode: e.statusCode });
       } else {
@@ -80,20 +127,29 @@ export function WearQueuePage({
       }
     } finally {
       setLoading(false);
+      setTableLoading(false);
     }
   }, [setBooks, search, genreFilter, sortOrder]);
 
   // 최초 진입 시 1회 조회
   useEffect(() => { fetchQueueBooks(0); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 검색어 / 장르 / 정렬이 바뀌면 1페이지부터 다시 조회 (검색은 타이핑 중 매 요청을 막기 위해 디바운스)
+  // 검색어가 바뀌면 1페이지부터 다시 조회 (타이핑 중 매 요청이 나가지 않도록 디바운스)
+  const isFirstSearchRun = useRef(true);
+  useEffect(() => {
+    if (isFirstSearchRun.current) { isFirstSearchRun.current = false; return; }
+    const timer = setTimeout(() => { fetchQueueBooks(0); }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search]);
+
+  // 장르/정렬은 클릭 한 번으로 값이 바로 확정되는 액션이므로 디바운스 없이 즉시 1페이지부터 재조회
   const isFirstFilterRun = useRef(true);
   useEffect(() => {
     if (isFirstFilterRun.current) { isFirstFilterRun.current = false; return; }
-    const timer = setTimeout(() => { fetchQueueBooks(0); }, FILTER_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
+    fetchQueueBooks(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, genreFilter, sortOrder]);
+  }, [genreFilter, sortOrder]);
 
   // 유휴화 도서 새로고침 (POST /api/checklists/idle-classify → 목록 재조회)
   // idle-classify로 서버 측 재산정을 먼저 수행한 뒤, 갱신된 결과를 1페이지부터 다시 불러온다.
@@ -104,6 +160,7 @@ export function WearQueuePage({
     setError(null);
     try {
       await classifyIdleBooksApi();
+      queueListCache.clear(); // 재산정으로 실제 데이터가 바뀌므로 이전에 캐시해둔 응답은 더 이상 유효하지 않음
       await fetchQueueBooks(0);
     } catch (e) {
       if (e instanceof ApiError) {
@@ -161,8 +218,15 @@ export function WearQueuePage({
       setBooks((prev) => prev.map((b) => b.id === targetId ? { ...b, damage: avgRounded } : b));
       setChecklistTarget(null);
 
-      // 서버 재조회 전까지 방금 등록한 도서를 화면에서 바로 빼주기 위해 목록 새로고침
-      fetchQueueBooks(page);
+      // 방금 등록한 도서가 이제 DAMAGE_PENDING 목록에서 빠지므로, 캐시해둔 이전 목록 응답은 더 이상 정확하지 않다.
+      // 이 화면으로 다시 돌아왔을 때 등록된 도서가 캐시 때문에 다시 보이지 않도록 비워준다.
+      queueListCache.clear();
+
+      // 점검 등록이 끝난 도서는 이 화면(DAMAGE_PENDING 목록) 대상이 아니므로 더 이상 여기 머무를 필요가 없다.
+      // WearManagePage로 이동시킨다 — 그쪽에서 마운트 시 GET /checklists/results/completed로 최신 목록을 다시 받아온다.
+      // (여기서 fetchQueueBooks로 재조회하면 등록 직후 화면에는 남아있는 채로 재클릭이 가능해져
+      //  "이미 등록된 점검 결과입니다" 에러로 이어지는 원인이 되므로 재조회 대신 즉시 페이지 전환한다.)
+      setActivePage("wear-manage");
     } catch (e) {
       if (e instanceof ApiError) {
         setSaveError({ message: e.message, errorType: e.error, statusCode: e.statusCode });
@@ -251,7 +315,12 @@ export function WearQueuePage({
           <span className="ml-auto text-sm text-muted-foreground self-center whitespace-nowrap">{queueBooks.length} / {pageInfo.totalElements}건</span>
         </Card>
 
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden relative">
+          {tableLoading && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 backdrop-blur-[1px]">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-muted/40">

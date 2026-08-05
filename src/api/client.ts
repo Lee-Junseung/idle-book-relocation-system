@@ -66,9 +66,10 @@ function extractError(body: unknown): string | undefined {
     return b?.error;
 }
 
-export async function apiGet<T>(path: string): Promise<T> {
+export async function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> {
     const res = await fetch(`${BASE_URL}${path}`, {
         headers: { ...authHeaders() },
+        signal,
     });
     const json = await res.json().catch(() => null);
 
