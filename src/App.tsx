@@ -49,8 +49,8 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { id: "overview", label: "개요", sub: "대시보드 & 통계", icon: LayoutDashboard },
-  { id: "wear-queue", label: "마모 점검 대상", sub: "6개월 경과 도서", icon: CalendarClock },
-  { id: "wear-manage", label: "마모 처리 현황", sub: "폐기·이관·보존 결정", icon: ClipboardCheck },
+  { id: "wear-queue", label: "유휴 도서 점검 대상", sub: "도서 점검 등록", icon: CalendarClock },
+  { id: "wear-manage", label: "유휴 도서 처리 현황", sub: "폐기·이관·보존 결정", icon: ClipboardCheck },
   { id: "relocation", label: "이관 우선순위", sub: "수원시 분관 이동", icon: ArrowLeftRight },
 ];
 

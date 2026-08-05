@@ -213,7 +213,7 @@ export function RelocationPage() {
       <div className="flex flex-col gap-4">
         <SectionHeader
           title="이관 우선순위 목록"
-          sub="수원시 공공도서관 네트워크 — 하드필터 통과 도서 대상 매칭 스코어 기반 우선순위 · 행 클릭 시 하단 상세 펼침">
+          sub="매칭 스코어 기반 이관 우선순위">
           <button onClick={requestExecuteSelected} disabled={selected.size === 0 || executing}
             className="flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
             style={{ backgroundColor: NAV }}>
@@ -235,9 +235,9 @@ export function RelocationPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           {[
-            { label: "대기·이송중 건수", value: summary.totalPending, color: NAV, unit: "건" },
-            { label: "총 발신 건수", value: summary.totalSent, color: BLUE, unit: "건" },
-            { label: "총 수신 건수", value: summary.totalReceived, color: GREEN, unit: "건" },
+            { label: "전체 대기 건수", value: summary.totalPending, color: NAV, unit: "건" },
+            { label: "이번달 발신 건수", value: summary.totalSent, color: BLUE, unit: "건" },
+            { label: "이번달 수신 건수", value: summary.totalReceived, color: GREEN, unit: "건" },
           ].map((s) => (
             <Card key={s.label} className="p-3 flex flex-col gap-1">
               <span className="text-[11px] text-muted-foreground">{s.label}</span>
@@ -278,8 +278,8 @@ export function RelocationPage() {
                     { label: "", hide: "" },
                     { label: "도서 / 장르", hide: "" },
                     { label: "출발 → 목적지", hide: "" },
-                    { label: "거리 (km)", hide: "hidden lg:table-cell" },
-                    { label: "매칭 스코어 ↕", hide: "" },
+                    { label: "거리", hide: "hidden lg:table-cell" },
+                    { label: "매칭 스코어", hide: "" },
                     { label: "방향", hide: "hidden xl:table-cell" },
                     { label: "상태", hide: "" },
                   ].map((h, i) => (

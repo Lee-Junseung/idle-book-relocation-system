@@ -397,8 +397,8 @@ export function WearManagePage({
 
       <div className="flex flex-col gap-4">
         <SectionHeader
-          title="마모 처리 현황 목록"
-          sub={`점검 리스트 등록 완료 도서 · 행 클릭 시 하단 상세 펼침`}>
+          title="유휴 도서 처리 목록"
+          sub={`점검 리스트 등록 도서 폐기·이관·보존 결정`}>
           <button onClick={() => requestBulkAction("폐기승인")} disabled={selected.size === 0}
             className="flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
             style={{ backgroundColor: RED }}>

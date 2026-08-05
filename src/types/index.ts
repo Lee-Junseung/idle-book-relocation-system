@@ -22,7 +22,7 @@ export interface Book {
   // 결정이 아직 확정되지 않은 도서는 undefined.
   decidedDate?: string;
   // 유휴화 점수 API(/api/checklists) 응답으로 채워지는 필드.
-  // 점검 리스트가 아직 등록되지 않은 도서(마모 점검 대상)에만 존재하므로 optional.
+  // 점검 리스트가 아직 등록되지 않은 도서(유휴 도서 점검 대상)에만 존재하므로 optional.
   idleScore?: number;
   sage?: number;
   sloan?: number;
