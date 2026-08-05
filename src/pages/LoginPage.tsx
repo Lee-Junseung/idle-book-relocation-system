@@ -35,7 +35,7 @@ const CALL_NUMBERS = [
 
 const PROCESS_STEPS = [
   { n: "01", text: "유휴화 도서 점검" },
-  { n: "02", text: "이관 · 보관 · 폐기 결정" },
+  { n: "02", text: "폐기 · 이관 · 보존 결정" },
   { n: "03", text: "이관 도서 우선순위 배정" },
 ];
 
