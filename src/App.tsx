@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   LayoutDashboard, BookOpen, ArrowLeftRight, Bell, Settings, LogOut,
-  ChevronRight, Pin, Building2, CalendarClock, ClipboardCheck, Menu,
+  ChevronRight, Pin, Building2, CalendarClock, ClipboardCheck, Menu, Trash2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -13,7 +13,7 @@ import { PageId, Session, Book, BookStatus, DamageInspection } from "./types";
 import { loadSession, logout } from "./api/session";
 import { setUnauthorizedHandler } from "./api/client";
 import { DATA_REF_DATE } from "./components/lib";
-import { OverviewPage, WearQueuePage, WearManagePage, RelocationPage, LoginPage } from "./pages";
+import { OverviewPage, WearQueuePage, WearManagePage, RelocationPage, DiscardedBooksPage, LoginPage } from "./pages";
 
 const DATA_AS_OF_DATE = DATA_REF_DATE.toISOString().slice(0, 10);
 
@@ -52,6 +52,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: "wear-queue", label: "유휴 도서 점검 대상", sub: "도서 점검 등록", icon: CalendarClock },
   { id: "wear-manage", label: "유휴 도서 처리 현황", sub: "폐기·이관·보존 결정", icon: ClipboardCheck },
   { id: "relocation", label: "이관 우선순위", sub: "수원시 분관 이동", icon: ArrowLeftRight },
+  { id: "discarded", label: "폐기 도서 현황", sub: "폐기 도서 상한 관리", icon: Trash2 },
 ];
 
 interface QuickAction {
@@ -277,6 +278,7 @@ export default function App() {
           {page === "wear-queue" && <WearQueuePage books={books} setBooks={setBooks} inspections={inspections} setInspections={setInspections} inspectorName={session.name} librarianCode={session.librarianId} setActivePage={setPage} />}
           {page === "wear-manage" && <WearManagePage books={books} setBooks={setBooks} inspectorName={session.name} librarianCode={session.librarianId} />}
           {page === "relocation" && <RelocationPage />}
+          {page === "discarded" && <DiscardedBooksPage />}
         </main>
       </div>
     </div>

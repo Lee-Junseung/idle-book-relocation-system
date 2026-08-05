@@ -366,7 +366,7 @@ export function WearQueuePage({
             </table>
           </div>
           <div className="px-4 py-3 border-t border-border bg-muted/20 flex items-center justify-between flex-wrap gap-2">
-            <span className="text-sm text-muted-foreground">유휴화 점수 = (KDC별 정보 노후도 가중치 X 정보 노후도 점수) + (KDC별 대출 저조도 가중치 X 대출 저조도 점수) + (KDC별 대출 감소도 가중치 X 대출 감소도 점수)</span>
+            <span className="text-sm text-muted-foreground">유휴화 점수 = (정보 노후도 가중치 X 정보 노후도) + (대출 저조도 가중치 X 대출 저조도) + (대출 감소도 가중치 X 대출 감소도)</span>
             {pageInfo.totalPages > 1 && (() => {
               const WINDOW = 5;
               const half = Math.floor(WINDOW / 2);

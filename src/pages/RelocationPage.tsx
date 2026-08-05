@@ -235,7 +235,7 @@ export function RelocationPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           {[
-            { label: "전체 대기 건수", value: summary.totalPending, color: NAV, unit: "건" },
+            { label: "총 대기 건수", value: summary.totalPending, color: NAV, unit: "건" },
             { label: "이번달 발신 건수", value: summary.totalSent, color: BLUE, unit: "건" },
             { label: "이번달 수신 건수", value: summary.totalReceived, color: GREEN, unit: "건" },
           ].map((s) => (

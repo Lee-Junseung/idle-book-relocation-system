@@ -16,7 +16,7 @@ import {
     classifyIdleBooksApiMock,
 } from "./checklistsMock";
 
-// 유휴 도서 점검 대상 조회 (GET /api/checklists?status=&keyword=&genre=&sortOrder=&page=&size=)
+// 마모 점검 대상 도서 목록 조회 (GET /api/checklists?status=&keyword=&genre=&sortOrder=&page=&size=)
 // keyword(검색어)/genre(장르 필터)/sortOrder(유휴화 점수 정렬)는 서버로 그대로 전달한다.
 // 서버가 전체 데이터 기준으로 검색·필터·정렬한 뒤 페이지 단위로 잘라서 내려주므로, 현재 페이지(10건) 안에서만 걸러지는 문제 없이 항상 페이지당 10건이 유지된다.
 export const getChecklistListApi = (

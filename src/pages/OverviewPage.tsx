@@ -226,7 +226,7 @@ export function OverviewPage() {
             <span className="text-xs text-muted-foreground break-words">{CURRENT_LIBRARY.address}</span>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            수원시 공공도서관 네트워크 연결 · 이관 알고리즘 기준점
+            이관 알고리즘 기준점 · 수원시 공공도서관 네트워크 연결
           </p>
         </div>
       </div>
