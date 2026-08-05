@@ -34,7 +34,8 @@ export function getDotColor(level: number): string {
   return DOT_COLORS[Math.round(level)] || NEUTRAL_COLOR;
 }
 
-// 손상도/점수에 해당하는 라벨을 안전하게 조회함. 범위를 벗어나면 빈 문자열로 폴백함.
+// 손상도/점수에 해당하는 라벨을 안전하게 조회함.
+// 범위를 벗어나면 빈 문자열로 폴백함.
 export function getDotLabel(level: number): string {
   return DOT_LABELS[Math.round(level)] ?? "";
 }

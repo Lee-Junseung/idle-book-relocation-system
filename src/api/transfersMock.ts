@@ -10,7 +10,8 @@ import {
 let seq = 200;
 const nextId = () => ++seq;
 
-// 최초 상태의 이관 추천 목록. execute() 호출 시 이 배열의 status가 in-place로 바뀐다.
+// 최초 상태의 이관 추천 목록.
+// execute() 호출 시 이 배열의 status가 in-place로 바뀐다.
 const MOCK_RECORDS: TransferRecommendation[] = [
   {
     recommendationId: 101, bookTitle: "머신러닝 입문", genre: "컴퓨터공학",

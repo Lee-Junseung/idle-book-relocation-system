@@ -10,8 +10,9 @@ import {
 
 import { Card, SectionHeader, DamageDot, DamageTooltipCell, ConfirmModal, ChecklistEditModal, withAlpha, getDotColor, getDotLabel } from "../components";
 import { NAV, GREEN, RED, PURPLE, AMBER } from "../constants/colors";
-import { BOOK_LOAN_HISTORY, BOOK_DAMAGE_REASON } from "../constants/bookDemoData";
+import { MOCK_BOOK_LOAN_HISTORY } from "../api/resultChecklistMock";
 import { INSP_ITEMS_FLAT, averageScore, clampToScore } from "../constants/checklistItems";
+import { KDC_GENRES } from "../constants/genres";
 import { buildMonthlyLoanData } from "../components/lib";
 import { Book, BookStatus, DamageInspection, ModalConfig } from "../types";
 import {
@@ -22,6 +23,7 @@ import {
   confirmDecisionApi,
   mapCompletedItemToBook,
   bookStatusToDecision,
+  MAX_TOTAL_SCORE,
 } from "../api/resultChecklist";
 import { ApiError } from "../api/client";
 import {
@@ -42,20 +44,17 @@ const STATUS_META: Record<
 };
 
 export function WearManagePage({
-  books, setBooks, inspections, setInspections, inspectorName, librarianCode,
+  books, setBooks, inspectorName, librarianCode,
 }: {
   books: Book[];
   setBooks: React.Dispatch<React.SetStateAction<Book[]>>;
-  inspections: Record<string, DamageInspection>;
-  setInspections: React.Dispatch<React.SetStateAction<Record<string, DamageInspection>>>;
   inspectorName?: string;
   // PUT /checklists/results/{resultBatchId} 요청에 실리는 사서 식별 코드 (세션의 librarianId).
   // 화면에 표시되는 자유입력 "점검자명"(inspectorName/inspector)과는 별개 값입니다.
   librarianCode?: string;
 }) {
   const branchFilter = CURRENT_LIBRARY.name;
-  const genres = ["전체 장르", ...Array.from(new Set(books.map((b) => b.genre)))];
-
+  const genres = ["전체 장르", ...KDC_GENRES];
   const [genreFilter, setGenreFilter] = useState("전체 장르");
   const [damageMin, setDamageMin] = useState(1);
   const [search, setSearch] = useState("");
@@ -139,12 +138,12 @@ export function WearManagePage({
       .finally(() => setDetailLoading(false));
   }, [panelBook]);
 
-  const inspectedBooks = books.filter((b) => !!inspections[b.id] || !!resultBatchByBookId[b.id]);
+  const inspectedBooks = books.filter((b) => !!resultBatchByBookId[b.id]);
 
   const filtered = useMemo(() => {
     let list = books.filter((b) =>
       b.branch === branchFilter &&
-      (!!inspections[b.id] || !!resultBatchByBookId[b.id]) &&
+      !!resultBatchByBookId[b.id] &&
       (genreFilter === "전체 장르" || b.genre === genreFilter) &&
       b.damage >= damageMin &&
       (search === "" || b.title.includes(search) || b.isbn.includes(search) || b.id.includes(search))
@@ -153,7 +152,7 @@ export function WearManagePage({
       const av = a[sortKey] as string | number, bv = b2[sortKey] as string | number;
       return sortDir === "asc" ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
     });
-  }, [books, inspections, resultBatchByBookId, branchFilter, genreFilter, damageMin, search, sortKey, sortDir]);
+  }, [books, resultBatchByBookId, branchFilter, genreFilter, damageMin, search, sortKey, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
 
@@ -305,8 +304,6 @@ export function WearManagePage({
     if (!checklistTarget) return;
     const targetId = checklistTarget.id;
 
-    // 화면(로컬) 상태는 기존과 동일하게 즉시 반영합니다.
-    setInspections((prev) => ({ ...prev, [targetId]: insp }));
     const avgRounded = clampToScore(averageScore(insp));
     setBooks((prev) => prev.map((b) => b.id === targetId ? { ...b, damage: avgRounded } : b));
 
@@ -502,14 +499,14 @@ export function WearManagePage({
                       <input type="checkbox" checked={allSel} onChange={toggleAll} className="rounded accent-primary" />
                     </th>
                     {([
-                      { key: "title", label: "제목 / 저자", hide: "" },
-                      { key: "genre", label: "장르", hide: "hidden md:table-cell" },
-                      { key: "damage", label: "마모 수준", hide: "" },
-                      { key: "turnover", label: "연 대출률", hide: "hidden xl:table-cell" },
-                    ] as { key: keyof Book; label: string; hide: string }[]).map(({ key, label, hide }) => (
-                      <th key={key} onClick={() => toggleSort(key)}
-                        className={`px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider cursor-pointer select-none whitespace-nowrap ${hide}`}>
-                        <span className="flex items-center gap-1 whitespace-nowrap">{label}<SortIcon k={key} /></span>
+                      { key: "title", label: "제목 / 저자", hide: "", sortable: false },
+                      { key: "genre", label: "장르", hide: "hidden md:table-cell", sortable: false },
+                      { key: "damage", label: "마모 수준", hide: "", sortable: true },
+                      { key: "turnover", label: "연 대출률", hide: "hidden xl:table-cell", sortable: true },
+                    ] as { key: keyof Book; label: string; hide: string; sortable: boolean }[]).map(({ key, label, hide, sortable }) => (
+                      <th key={key} onClick={sortable ? () => toggleSort(key) : undefined}
+                        className={`px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap ${sortable ? "cursor-pointer select-none" : ""} ${hide}`}>
+                        <span className="flex items-center gap-1 whitespace-nowrap">{label}{sortable && <SortIcon k={key} />}</span>
                       </th>
                     ))}
                     <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">처리 상태</th>
@@ -522,10 +519,9 @@ export function WearManagePage({
                     const isSel = selected.has(book.id);
                     const done = book.status !== "대기";
                     const isActive = panelBook?.id === book.id;
-                    const bAnnualHistory = BOOK_LOAN_HISTORY[book.id]
+                    const bAnnualHistory = MOCK_BOOK_LOAN_HISTORY[book.id]
                       ?? Array.from({ length: 10 }, (_, i) => ({ year: String(2015 + i), v: 1 }));
                     const bMonthlyData = buildMonthlyLoanData(book, bAnnualHistory);
-                    const bReason = BOOK_DAMAGE_REASON[book.id] ?? `최근 대출률 ${book.turnover.toFixed(1)}회/년 · 마모 수준 ${book.damage}/5`;
 
                     return (
                       <>
@@ -607,7 +603,7 @@ export function WearManagePage({
                                     <p className="text-sm font-semibold text-foreground mb-2">최근 12개월 월별 대출 추이</p>
                                     <div className="h-48 sm:h-56">
                                       <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart data={bMonthlyData} margin={{ top: 4, right: 12, bottom: 2, left: 0 }}>
+                                        <LineChart data={bMonthlyData} margin={{ top: 4, right: 16, bottom: 2, left: 8 }}>
                                           <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
                                           <XAxis dataKey="month"
                                             tick={{ fontSize: 10, fill: "#9CA3AF", fontFamily: "'JetBrains Mono', monospace" }}
@@ -642,7 +638,6 @@ export function WearManagePage({
                                     <div className="flex items-center gap-2 mb-2">
                                       <DamageDot level={book.damage} />
                                     </div>
-                                    <p className="text-sm text-muted-foreground leading-relaxed mb-2">{bReason}</p>
 
                                     {/* API(3번, 상세 조회) 기반 렌더링 — 로딩/에러/데이터 순으로 표시 */}
                                     {detailLoading ? (
@@ -659,7 +654,7 @@ export function WearManagePage({
                                               {r.title}{r.note ? ` · ${r.note}` : ""}
                                             </span>
                                             <span className="text-xs font-semibold flex-shrink-0" style={{ color: r.isPassed ? GREEN : RED }}>
-                                              {r.isPassed ? "이상없음" : `감점 ${r.itemScore}`}
+                                              {r.isPassed ? "통과" : "미흡"} ({r.itemScore}/{checkItemMaster[r.checkItemId]?.maxScore ?? 5}점)
                                             </span>
                                           </div>
                                         ))}
@@ -668,8 +663,7 @@ export function WearManagePage({
                                             담당 {bookDetail.librarianCode} · <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{bookDetail.checkedDate}</span>
                                           </span>
                                           <span className="text-xs font-bold flex-shrink-0 ml-1" style={{ color: NAV, fontFamily: "'JetBrains Mono', monospace" }}>
-                                            총점 {bookDetail.totalScore}
-                                          </span>
+                                            총점 {bookDetail.totalScore}/{MAX_TOTAL_SCORE}                                          </span>
                                         </div>
                                       </div>
                                     ) : (

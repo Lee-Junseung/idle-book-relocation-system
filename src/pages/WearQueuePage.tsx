@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { Card, SectionHeader, InspectionChecklistModal } from "../components";
 import { NAV } from "../constants/colors";
+import { KDC_GENRES } from "../constants/genres";
 import { IdleScoreBar } from "../components/IdleScoreBar";
 import { Book, DamageInspection } from "../types";
 import type { ChecklistErrorState, ChecklistListResponse, ChecklistSortOrder } from "../types/checklists";
@@ -39,13 +40,6 @@ const buildQueueCacheKey = (
   genre: string,
   sortOrder: ChecklistSortOrder | null
 ) => `${targetPage}|${keyword}|${genre}|${sortOrder ?? ""}`;
-
-// GET /api/checklists의 genre 파라미터는 자유 텍스트가 아니라 KDC 대분류 값을 그대로 받으므로,
-// (전체 목록이 아니라) 현재 페이지에 실린 도서에서만 뽑던 기존 방식 대신 KDC 10개 대분류를 고정 목록으로 사용한다.
-const KDC_GENRES = [
-  "총류", "철학", "종교", "사회과학", "자연과학",
-  "기술과학", "예술", "언어", "문학", "역사",
-];
 
 export function WearQueuePage({
   books, setBooks, inspections, setInspections, inspectorName, librarianCode, setActivePage,
@@ -197,6 +191,7 @@ export function WearQueuePage({
   // 점검 리스트 등록 (POST /api/checklists/results)
   const handleChecklistSave = async (insp: DamageInspection) => {
     if (!checklistTarget) return;
+    if (saving) return; // 이미 저장 중이면 중복 호출 무시
 
     // 로그인 응답에 librarianCode가 내려오지 않아 세션에 값이 없을 수 있음(App.tsx/types/index.ts 참고).
     // 빈 값으로 등록 요청을 보내면 백엔드에서 어느 사서가 점검했는지 알 수 없으므로 여기서 미리 막는다.
@@ -249,6 +244,7 @@ export function WearQueuePage({
           book={checklistTarget}
           initial={inspections[checklistTarget.id]}
           inspectorDefault={inspectorName}
+          saving={saving}
           onClose={() => { setChecklistTarget(null); setSaveError(null); }}
           onSave={handleChecklistSave}
         />

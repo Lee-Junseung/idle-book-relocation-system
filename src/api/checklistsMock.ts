@@ -48,8 +48,7 @@ export const getChecklistListApiMock = (
     size: number,
     query: ChecklistListQuery = {}
 ): Promise<ChecklistListResponse> => {
-    // 실제 백엔드는 keyword/genre/sortOrder를 전체 데이터 기준으로 적용한 뒤 페이지를 잘라 내려주므로,
-    // mock도 동일하게 "전체 목록 생성 → 필터/정렬 → 페이지 슬라이스" 순서로 흉내낸다.
+    // 실제 백엔드는 keyword/genre/sortOrder를 전체 데이터 기준으로 적용한 뒤 페이지를 잘라 내려주므로, mock도 동일하게 "전체 목록 생성 → 필터/정렬 → 페이지 슬라이스" 순서로 흉내낸다.
     let all = Array.from({ length: MOCK_TOTAL_ELEMENTS }, (_, i) => buildMockItem(i));
 
     if (query.keyword) {
