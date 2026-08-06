@@ -4,9 +4,12 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import {
   Trash2, MoveRight, BookMarked,
   ChevronUp, ChevronDown, Check, Clock, ListFilter,
-  X, Search, ClipboardEdit, Tag, Loader2, AlertTriangle,
+  Search, ClipboardEdit, Tag, Loader2, AlertTriangle,
   ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight,
 } from "lucide-react";
+// import {
+//   X,
+// } from "lucide-react";
 
 import { Card, SectionHeader, DamageDot, DamageTooltipCell, ConfirmModal, ChecklistEditModal, withAlpha, getDotColor, getDotLabel } from "../components";
 import { NAV, GREEN, RED, PURPLE, AMBER } from "../constants/colors";
@@ -584,18 +587,13 @@ export function WearManagePage({
                           <tr key={`panel-${book.id}`} style={{ borderLeft: `2px solid ${NAV}` }}>
                             <td colSpan={7} className="px-0 pb-0">
                               <div className="px-4 py-4 border-b border-border" style={{ backgroundColor: withAlpha(NAV, 0.02) }}>
-                                <div className="flex items-center justify-between mb-3 gap-2">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: NAV }} />
-                                    <p className="text-sm font-semibold text-foreground truncate">{book.title}</p>
-                                    <span className="text-sm text-muted-foreground truncate">— {book.author}</span>
-                                    <span className="text-xs text-muted-foreground px-1.5 py-0.5 rounded border border-border bg-card flex-shrink-0" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{book.id}</span>
-                                  </div>
+                                {/* // X 버튼 */}
+                                {/* <div className="flex items-center justify-between mb-3 gap-2">
                                   <button onClick={(e) => { e.stopPropagation(); setPanelBook(null); }}
                                     className="p-1 rounded hover:bg-muted text-muted-foreground transition-colors flex-shrink-0">
                                     <X className="w-4 h-4" />
                                   </button>
-                                </div>
+                                </div> */}
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                   <div className="bg-card rounded-md border border-border p-3 flex flex-col">
