@@ -13,10 +13,8 @@ import {
 
 import { Card, SectionHeader, DamageDot, DamageTooltipCell, ConfirmModal, ChecklistEditModal, withAlpha, getDotColor, getDotLabel } from "../components";
 import { NAV, GREEN, RED, PURPLE, AMBER } from "../constants/colors";
-import { MOCK_BOOK_LOAN_HISTORY } from "../api/resultChecklistMock";
 import { INSP_ITEMS_FLAT, averageScore, clampToScore } from "../constants/checklistItems";
 import { KDC_GENRES } from "../constants/genres";
-import { buildMonthlyLoanData } from "../components/lib";
 import { Book, BookStatus, DamageInspection, ModalConfig } from "../types";
 import {
   getCompletedChecklistsApi,
@@ -24,6 +22,8 @@ import {
   updateChecklistResultApi,
   getCheckItemsApi,
   confirmDecisionApi,
+  confirmDecisionsApi,
+  getMonthlyLoanTrendApi,
   mapCompletedItemToBook,
   bookStatusToDecision,
   MAX_TOTAL_SCORE,
@@ -33,6 +33,7 @@ import {
   BookDetailResult,
   UpdateCheckResultInput,
   CheckItemMaster,
+  MonthlyLoanTrendItem,
 } from "../types/resultChecklist";
 
 import { CURRENT_LIBRARY } from "../constants/library";
@@ -141,6 +142,40 @@ export function WearManagePage({
       .finally(() => setDetailLoading(false));
   }, [panelBook]);
 
+  // 월별 대출 추이 조회 (행 패널을 펼칠 때) — GET /api/checklists/books/{bookId}/loans/monthly
+  const [monthlyLoanData, setMonthlyLoanData] = useState<MonthlyLoanTrendItem[]>([]);
+  const [monthlyLoanLoading, setMonthlyLoanLoading] = useState(false);
+  const [monthlyLoanError, setMonthlyLoanError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!panelBook) {
+      setMonthlyLoanData([]);
+      setMonthlyLoanError(null);
+      return;
+    }
+    setMonthlyLoanLoading(true);
+    setMonthlyLoanError(null);
+    getMonthlyLoanTrendApi(Number(panelBook.id))
+      .then((items) => setMonthlyLoanData(items))
+      .catch((err: unknown) => {
+        const message =
+          err instanceof ApiError ? err.message : "월별 대출 추이를 불러오지 못했습니다.";
+        setMonthlyLoanError(message);
+        setMonthlyLoanData([]);
+      })
+      .finally(() => setMonthlyLoanLoading(false));
+  }, [panelBook]);
+
+  // API의 "yyyy-MM" 형식을 차트 라벨("yy.MM")로 변환하고, 월 순서대로 정렬함.
+  const monthlyChartData = useMemo(() => {
+    return [...monthlyLoanData]
+      .sort((a, b) => a.yearMonth.localeCompare(b.yearMonth))
+      .map((item) => ({
+        month: item.yearMonth.length === 7 ? item.yearMonth.slice(2).replace("-", ".") : item.yearMonth,
+        v: item.loanCount,
+      }));
+  }, [monthlyLoanData]);
+
   const inspectedBooks = books.filter((b) => !!resultBatchByBookId[b.id]);
 
   const filtered = useMemo(() => {
@@ -178,6 +213,7 @@ export function WearManagePage({
   const [decisionSaving, setDecisionSaving] = useState(false);
 
   // resultBatchId가 있는 도서만 서버에 저장 요청을 보내고, 없는 도서는 건너뛴 뒤 실패로 안내합니다 (목록 새로고침이 필요한 상태일 수 있음).
+  // 대상이 1건이면 단건 API(confirmDecisionApi)를, 2건 이상이면 일괄 API(confirmDecisionsApi)를 한 번만 호출합니다.
   const confirmDecisionForBooks = async (ids: string[], status: Exclude<BookStatus, "대기">) => {
     if (!librarianCode) {
       setModal({
@@ -197,42 +233,65 @@ export function WearManagePage({
     const skipped = ids.filter((id) => resultBatchByBookId[id] === undefined);
 
     setDecisionSaving(true);
-    const results = await Promise.allSettled(
-      targets.map((id) =>
-        confirmDecisionApi(resultBatchByBookId[id], { decision, librarianCode, decidedDate })
-      )
-    );
-    setDecisionSaving(false);
 
-    // 성공한 건만 화면 상태에도 반영합니다.
-    // 확정일(분류 확정일)은 서버가 응답으로 내려준 decidedAt(ISO 8601)을 그대로 사용합니다
-    // 클라이언트에서 보낸 decidedDate는 서버가 실제로 반영한 시각과 다를 수 있으므로 신뢰하지 않습니다.
-    const succeededEntries = targets
-      .map((id, i) => ({ id, result: results[i] }))
-      .filter(
-        (e): e is { id: string; result: PromiseFulfilledResult<Awaited<ReturnType<typeof confirmDecisionApi>>> } =>
-          e.result.status === "fulfilled"
+    // 성공한 도서의 id -> 서버가 응답으로 내려준 decidedAt(ISO 8601). 화면 반영 시 이 값을 그대로 사용합니다
+    // (클라이언트에서 보낸 decidedDate는 서버가 실제로 반영한 시각과 다를 수 있으므로 신뢰하지 않습니다).
+    let succeededEntries: { id: string; decidedAt: string }[] = [];
+    let failedCount = skipped.length;
+    let errorMessage: string | undefined;
+
+    if (targets.length <= 1) {
+      // 단건 — PUT /api/checklists/results/{resultBatchId}/decision
+      const results = await Promise.allSettled(
+        targets.map((id) =>
+          confirmDecisionApi(resultBatchByBookId[id], { decision, librarianCode, decidedDate })
+        )
       );
-    const succeededIds = succeededEntries.map((e) => e.id);
-    const failedCount = targets.length - succeededIds.length + skipped.length;
+      succeededEntries = targets
+        .map((id, i) => ({ id, result: results[i] }))
+        .filter(
+          (e): e is { id: string; result: PromiseFulfilledResult<Awaited<ReturnType<typeof confirmDecisionApi>>> } =>
+            e.result.status === "fulfilled"
+        )
+        .map((e) => ({ id: e.id, decidedAt: e.result.value.decidedAt }));
+      failedCount += targets.length - succeededEntries.length;
+      const firstError = results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
+      errorMessage = firstError?.reason instanceof ApiError ? firstError.reason.message : undefined;
+    } else {
+      // 다건 — PUT /api/checklists/results/decisions (한 번의 요청으로 일괄 처리)
+      try {
+        const response = await confirmDecisionsApi({
+          items: targets.map((id) => ({ resultBatchId: resultBatchByBookId[id], decision })),
+        });
+        succeededEntries = targets.flatMap((id) => {
+          const match = response.find((r) => r.resultBatchId === resultBatchByBookId[id]);
+          return match ? [{ id, decidedAt: match.decidedAt }] : [];
+        });
+        failedCount += targets.length - succeededEntries.length;
+      } catch (err) {
+        // 일괄 API는 단일 요청이므로 실패하면 대상 전체가 실패로 처리됩니다.
+        failedCount += targets.length;
+        errorMessage = err instanceof ApiError ? err.message : undefined;
+      }
+    }
+
+    setDecisionSaving(false);
 
     if (succeededEntries.length > 0) {
       setBooks((prev) =>
         prev.map((b) => {
           const entry = succeededEntries.find((e) => e.id === b.id);
           return entry
-            ? { ...b, status, decidedDate: entry.result.value.decidedAt.slice(0, 10) }
+            ? { ...b, status, decidedDate: entry.decidedAt.slice(0, 10) }
             : b;
         })
       );
     }
 
+    const succeededIds = succeededEntries.map((e) => e.id);
+
     if (failedCount > 0) {
-      const firstError = results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
-      const message =
-        firstError?.reason instanceof ApiError
-          ? firstError.reason.message
-          : "일부 도서의 처리 결정 저장에 실패했습니다.";
+      const message = errorMessage ?? "일부 도서의 처리 결정 저장에 실패했습니다.";
       setModal({
         title: succeededIds.length > 0 ? "일부 처리 실패" : "처리 실패",
         body: succeededIds.length > 0
@@ -522,9 +581,6 @@ export function WearManagePage({
                     const isSel = selected.has(book.id);
                     const done = book.status !== "대기";
                     const isActive = panelBook?.id === book.id;
-                    const bAnnualHistory = MOCK_BOOK_LOAN_HISTORY[book.id]
-                      ?? Array.from({ length: 10 }, (_, i) => ({ year: String(2015 + i), v: 1 }));
-                    const bMonthlyData = buildMonthlyLoanData(book, bAnnualHistory);
 
                     return (
                       <>
@@ -599,26 +655,40 @@ export function WearManagePage({
                                   <div className="bg-card rounded-md border border-border p-3 flex flex-col">
                                     <p className="text-sm font-semibold text-foreground mb-2">최근 12개월 월별 대출 추이</p>
                                     <div className="h-48 sm:h-56">
-                                      <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart data={bMonthlyData} margin={{ top: 4, right: 16, bottom: 2, left: 8 }}>
-                                          <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
-                                          <XAxis dataKey="month"
-                                            tick={{ fontSize: 10, fill: "#9CA3AF", fontFamily: "'JetBrains Mono', monospace" }}
-                                            axisLine={false} tickLine={false} />
-                                          <YAxis width={28}
-                                            tick={{ fontSize: 10, fill: "#9CA3AF", fontFamily: "'JetBrains Mono', monospace" }}
-                                            axisLine={false} tickLine={false}
-                                            domain={[0, "dataMax + 1"]} allowDecimals={false} />
-                                          <Tooltip
-                                            formatter={(v: number) => [`${v}건`, "월간 대출"]}
-                                            labelFormatter={(l) => l}
-                                            contentStyle={{ fontSize: 11, borderRadius: 4, border: "1px solid #E5E7EB", padding: "2px 8px" }}
-                                          />
-                                          <Line type="monotone" dataKey="v" stroke={NAV} strokeWidth={2}
-                                            dot={{ r: 3, fill: NAV, strokeWidth: 1.5, stroke: "#fff" }}
-                                            activeDot={{ r: 4.5, fill: NAV, strokeWidth: 0 }} />
-                                        </LineChart>
-                                      </ResponsiveContainer>
+                                      {monthlyLoanLoading ? (
+                                        <div className="h-full flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                                          <Loader2 className="w-3.5 h-3.5 animate-spin" /> 대출 추이 불러오는 중…
+                                        </div>
+                                      ) : monthlyLoanError ? (
+                                        <div className="h-full flex items-center justify-center text-sm" style={{ color: RED }}>
+                                          {monthlyLoanError}
+                                        </div>
+                                      ) : monthlyChartData.length === 0 ? (
+                                        <div className="h-full flex items-center justify-center text-sm text-muted-foreground italic">
+                                          대출 이력이 없습니다.
+                                        </div>
+                                      ) : (
+                                        <ResponsiveContainer width="100%" height="100%">
+                                          <LineChart data={monthlyChartData} margin={{ top: 4, right: 16, bottom: 2, left: 8 }}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
+                                            <XAxis dataKey="month"
+                                              tick={{ fontSize: 10, fill: "#9CA3AF", fontFamily: "'JetBrains Mono', monospace" }}
+                                              axisLine={false} tickLine={false} />
+                                            <YAxis width={28}
+                                              tick={{ fontSize: 10, fill: "#9CA3AF", fontFamily: "'JetBrains Mono', monospace" }}
+                                              axisLine={false} tickLine={false}
+                                              domain={[0, "dataMax + 1"]} allowDecimals={false} />
+                                            <Tooltip
+                                              formatter={(v: number) => [`${v}건`, "월간 대출"]}
+                                              labelFormatter={(l) => l}
+                                              contentStyle={{ fontSize: 11, borderRadius: 4, border: "1px solid #E5E7EB", padding: "2px 8px" }}
+                                            />
+                                            <Line type="monotone" dataKey="v" stroke={NAV} strokeWidth={2}
+                                              dot={{ r: 3, fill: NAV, strokeWidth: 1.5, stroke: "#fff" }}
+                                              activeDot={{ r: 4.5, fill: NAV, strokeWidth: 0 }} />
+                                          </LineChart>
+                                        </ResponsiveContainer>
+                                      )}
                                     </div>
                                   </div>
 
@@ -688,10 +758,8 @@ export function WearManagePage({
             </span>
             {totalPages > 1 && (() => {
               const WINDOW = 5;
-              const half = Math.floor(WINDOW / 2);
-              let start = Math.max(0, page - half);
-              let end = Math.min(totalPages - 1, start + WINDOW - 1);
-              start = Math.max(0, end - WINDOW + 1);
+              const start = Math.floor(page / WINDOW) * WINDOW;
+              const end = Math.min(totalPages - 1, start + WINDOW - 1);
               const pages = Array.from({ length: end - start + 1 }, (_, i) => start + i);
 
               const navBtnClass =

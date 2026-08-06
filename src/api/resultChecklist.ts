@@ -13,9 +13,13 @@ import {
     ConfirmDecisionData,
     ConfirmDecisionRequest,
     ConfirmDecisionResponse,
+    ConfirmDecisionsRequest,
+    ConfirmDecisionsResponse,
     CreateCheckItemRequest,
     CreateCheckItemResponse,
     DecisionType,
+    MonthlyLoanTrendItem,
+    MonthlyLoanTrendResponse,
     UpdateChecklistResultData,
     UpdateChecklistResultRequest,
     UpdateChecklistResultResponse,
@@ -28,6 +32,8 @@ import {
     createCheckItemApiMock,
     getCheckItemsApiMock,
     confirmDecisionApiMock,
+    confirmDecisionsApiMock,
+    getMonthlyLoanTrendApiMock,
 } from "./resultChecklistMock";
 
 // 점검 완료 도서 전체 목록 조회 (GET /api/checklists/results/completed)
@@ -144,6 +150,24 @@ export const confirmDecisionApi = async (
     const envelope = await apiPut<ConfirmDecisionResponse>(
         `/api/checklists/results/${resultBatchId}/decision`,
         body
+    );
+    return envelope.data;
+};
+
+// 폐기/이관/보존 결정 확정 (일괄) — PUT /api/checklists/results/decisions
+// 이 엔드포인트는 배열을 그대로 반환합니다 (ApiEnvelope 래핑 없음)
+export const confirmDecisionsApi = (
+    body: ConfirmDecisionsRequest
+): Promise<ConfirmDecisionsResponse> =>
+    USE_MOCK
+        ? confirmDecisionsApiMock(body)
+        : apiPut<ConfirmDecisionsResponse>("/api/checklists/results/decisions", body);
+
+// 도서 월별 대출 추이 조회 (GET /api/checklists/books/{bookId}/loans/monthly)
+export const getMonthlyLoanTrendApi = async (bookId: number): Promise<MonthlyLoanTrendItem[]> => {
+    if (USE_MOCK) return getMonthlyLoanTrendApiMock(bookId);
+    const envelope = await apiGet<MonthlyLoanTrendResponse>(
+        `/api/checklists/books/${bookId}/loans/monthly`
     );
     return envelope.data;
 };

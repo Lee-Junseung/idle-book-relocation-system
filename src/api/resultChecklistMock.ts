@@ -1,6 +1,6 @@
 // VITE_USE_MOCK=true 일 때 사용하는 목업 구현체 (WearManagePage 전용, 점검 "완료 결과" 도메인).
 // checklistsMock.ts와 동일하게 client.ts의 mockDelay/hashCode를 그대로 재사용합니다.
-import { ApiError, mockDelay } from "./client";
+import { ApiError, hashCode, mockDelay } from "./client";
 import {
     BookDetailResult,
     ChecklistHistoryEntry,
@@ -8,7 +8,10 @@ import {
     CompletedChecklistListResponse,
     ConfirmDecisionData,
     ConfirmDecisionRequest,
+    ConfirmDecisionsRequest,
+    ConfirmDecisionsResponse,
     CreateCheckItemRequest,
+    MonthlyLoanTrendItem,
     UpdateChecklistResultData,
     UpdateChecklistResultRequest,
 } from "../types/resultChecklist";
@@ -215,6 +218,18 @@ export const confirmDecisionApiMock = async (
     return { resultBatchId, decision: body.decision, decidedAt: new Date().toISOString() };
 };
 
+// 폐기/이관/보존 결정 확정 (일괄) — 없는 resultBatchId가 포함돼 있으면 500(비JSON) 응답을 재현
+export const confirmDecisionsApiMock = async (
+    body: ConfirmDecisionsRequest
+): Promise<ConfirmDecisionsResponse> => {
+    await mockDelay(null);
+    if (body.items.some((item) => NON_EXISTENT_RESULT_BATCH_IDS.has(item.resultBatchId))) {
+        throw new ApiError(NOT_FOUND_MESSAGE, 500);
+    }
+    const decidedAt = new Date().toISOString();
+    return body.items.map((item) => ({ resultBatchId: item.resultBatchId, decision: item.decision, decidedAt }));
+};
+
 // WearManagePage "최근 12개월 월별 대출 추이" 미니차트용 데모 데이터.
 export const MOCK_BOOK_LOAN_HISTORY: Record<string, LoanHistoryPoint[]> = {
     "BK-10041": [{ year: "2015", v: 18 }, { year: "2016", v: 15 }, { year: "2017", v: 12 }, { year: "2018", v: 9 }, { year: "2019", v: 7 }, { year: "2020", v: 4 }, { year: "2021", v: 3 }, { year: "2022", v: 2 }, { year: "2023", v: 1 }, { year: "2024", v: 0 }],
@@ -233,4 +248,24 @@ export const MOCK_BOOK_LOAN_HISTORY: Record<string, LoanHistoryPoint[]> = {
     "BK-10258": [{ year: "2015", v: 8 }, { year: "2016", v: 7 }, { year: "2017", v: 6 }, { year: "2018", v: 6 }, { year: "2019", v: 5 }, { year: "2020", v: 4 }, { year: "2021", v: 4 }, { year: "2022", v: 4 }, { year: "2023", v: 4 }, { year: "2024", v: 4 }],
     "BK-10271": [{ year: "2015", v: 14 }, { year: "2016", v: 15 }, { year: "2017", v: 16 }, { year: "2018", v: 17 }, { year: "2019", v: 18 }, { year: "2020", v: 15 }, { year: "2021", v: 17 }, { year: "2022", v: 18 }, { year: "2023", v: 19 }, { year: "2024", v: 16 }],
     "BK-10284": [{ year: "2015", v: 10 }, { year: "2016", v: 11 }, { year: "2017", v: 11 }, { year: "2018", v: 10 }, { year: "2019", v: 11 }, { year: "2020", v: 9 }, { year: "2021", v: 10 }, { year: "2022", v: 10 }, { year: "2023", v: 11 }, { year: "2024", v: 9 }],
+};
+
+// 도서 월별 대출 추이 조회 (GET /api/checklists/books/{bookId}/loans/monthly)
+// 최근 12개월(2025-08 ~ 2026-07)치를 bookId 기반 결정적 해시로 생성합니다.
+const MONTHLY_TREND_YEAR_MONTHS = [
+    "2025-08", "2025-09", "2025-10", "2025-11", "2025-12",
+    "2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07",
+];
+
+export const getMonthlyLoanTrendApiMock = async (bookId: number): Promise<MonthlyLoanTrendItem[]> => {
+    if (NON_EXISTENT_BOOK_IDS.has(bookId)) {
+        throw new ApiError(NOT_FOUND_MESSAGE, 500);
+    }
+    const base = 2 + (hashCode(`loan-base-${bookId}`) % 8); // 2~9건 기준선
+    const data = MONTHLY_TREND_YEAR_MONTHS.map((yearMonth, i) => {
+        const seed = hashCode(`loan-${bookId}-${i}`);
+        const jitter = (seed % 5) - 2; // -2 ~ +2
+        return { yearMonth, loanCount: Math.max(0, base + jitter) };
+    });
+    return mockDelay(data);
 };

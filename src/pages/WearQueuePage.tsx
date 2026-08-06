@@ -370,13 +370,11 @@ export function WearQueuePage({
             </table>
           </div>
           <div className="px-4 py-3 border-t border-border bg-muted/20 flex items-center justify-between flex-wrap gap-2">
-            <span className="text-sm text-muted-foreground">유휴화 점수 = (정보 노후도 가중치 X 정보 노후도) + (대출 저조도 가중치 X 대출 저조도) + (대출 감소도 가중치 X 대출 감소도)</span>
+            <span className="text-sm text-muted-foreground">유휴화 점수(U-Score) = (KDC별 정보 노후도 가중치 X 정보 노후도) + (KDC별 대출 저조도 가중치 X 대출 저조도) · 대출 감소도는 보조 필터(≥90)로 별도 적용</span>
             {pageInfo.totalPages > 1 && (() => {
               const WINDOW = 5;
-              const half = Math.floor(WINDOW / 2);
-              let start = Math.max(0, page - half);
-              let end = Math.min(pageInfo.totalPages - 1, start + WINDOW - 1);
-              start = Math.max(0, end - WINDOW + 1);
+              const start = Math.floor(page / WINDOW) * WINDOW;
+              const end = Math.min(pageInfo.totalPages - 1, start + WINDOW - 1);
               const pages = Array.from({ length: end - start + 1 }, (_, i) => start + i);
 
               const navBtnClass =

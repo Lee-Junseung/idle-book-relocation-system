@@ -347,10 +347,8 @@ export function RelocationPage() {
           </div>
           {pageInfo.totalPages > 1 && (() => {
             const WINDOW = 5;
-            const half = Math.floor(WINDOW / 2);
-            let start = Math.max(0, page - half);
-            let end = Math.min(pageInfo.totalPages - 1, start + WINDOW - 1);
-            start = Math.max(0, end - WINDOW + 1);
+            const start = Math.floor(page / WINDOW) * WINDOW;
+            const end = Math.min(pageInfo.totalPages - 1, start + WINDOW - 1);
             const pages = Array.from({ length: end - start + 1 }, (_, i) => start + i);
 
             const navBtnClass =

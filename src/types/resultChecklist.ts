@@ -153,3 +153,26 @@ export interface ConfirmDecisionData {
 }
 
 export type ConfirmDecisionResponse = ApiEnvelope<ConfirmDecisionData>;
+
+// 9-1. 폐기/이관/보존 결정 확정 (일괄) — PUT /api/checklists/results/decisions
+// 여러 resultBatchId를 한 번에 결정 확정할 때 사용. 단건 API(위 ConfirmDecisionRequest)와 달리
+// 이 엔드포인트는 ApiEnvelope 래핑 없이 배열을 그대로 반환합니다.
+export interface ConfirmDecisionsRequestItem {
+  resultBatchId: number;
+  decision: DecisionType;
+}
+
+export interface ConfirmDecisionsRequest {
+  items: ConfirmDecisionsRequestItem[];
+}
+
+export type ConfirmDecisionsResponse = ConfirmDecisionData[];
+
+// 9. 도서 월별 대출 추이 조회
+// GET /api/checklists/books/{bookId}/loans/monthly
+export interface MonthlyLoanTrendItem {
+  yearMonth: string; // "2025-08"
+  loanCount: number;
+}
+
+export type MonthlyLoanTrendResponse = ApiEnvelope<MonthlyLoanTrendItem[]>;

@@ -1,8 +1,11 @@
 // 유휴화 점수를 막대그래프로 표시하고, 클릭/탭 또는 마우스오버 시 점수 산정 근거를 툴팁으로 보여주는 컴포넌트
-// 점수 산출 공식: u_score = (Sage × 0.3) + (Sloan × 0.4) + (Sdecay × 0.3)
+// 점수 산출 공식(KDC 대분류별 가변 가중치): U_i = Wage(KDC) × Sage(i) + Wloan(KDC) × Sloan(i)
+// Sdecay(대출 감소도)는 U-Score 합산에 포함되지 않고, U-Score 산출 후 "과거 베스트셀러 → 현재 유휴 전환" 패턴을
+// 감지하는 보조 필터(Sdecay ≥ 90)로만 사용됨.
 import { useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Book } from "../types";
+import { KdcGenre } from "../constants/genres";
 import { NAV, AMBER, BROWN, RED } from "../constants/colors";
 
 const TOOLTIP_WIDTH = 224;
@@ -14,14 +17,31 @@ const N_MAX = 10;           // Sage 임계 기준 경과 연수 (년)
 const L_TARGET = 2.0;       // Sloan 목표 연평균 대출 횟수 (건/년)
 const DECAY_THRESHOLD = 90; // Sdecay 보조 필터 임계값
 
-// 공식의 가중치는 더 이상 KDC(장르)별이 아니라 고정값이므로 그대로 사용
+// KDC 대분류별 U-Score 가중치 — 정보 반감기 특성(정보 노후 속도 vs 클래식/보존 가치)에 따라 상이함.
 // (전체 점수 자체는 서버가 계산한 idleScore를 그대로 사용하며, 아래 가중치는 툴팁의 "구성 요소 breakdown" 표시용)
-const W_AGE = 0.3;
-const W_LOAN = 0.4;
-const W_DECAY = 0.3;
+const KDC_USCORE_WEIGHTS: Record<KdcGenre, { wAge: number; wLoan: number }> = {
+    "총류": { wAge: 0.8, wLoan: 0.2 },
+    "철학": { wAge: 0.2, wLoan: 0.8 },
+    "종교": { wAge: 0.2, wLoan: 0.8 },
+    "사회과학": { wAge: 0.5, wLoan: 0.5 },
+    "자연과학": { wAge: 0.6, wLoan: 0.4 },
+    "기술과학": { wAge: 0.7, wLoan: 0.3 },
+    "예술": { wAge: 0.3, wLoan: 0.7 },
+    "언어": { wAge: 0.3, wLoan: 0.7 },
+    "문학": { wAge: 0.1, wLoan: 0.9 },
+    "역사": { wAge: 0.1, wLoan: 0.9 },
+};
+// 장르가 KDC 10종 대분류에 매칭되지 않는 경우(예: "미분류")의 폴백 — 노후도/저조도를 동일 비중으로 반영
+const DEFAULT_USCORE_WEIGHT = { wAge: 0.5, wLoan: 0.5 };
+
+function getUScoreWeights(genre: string): { wAge: number; wLoan: number } {
+    return (KDC_USCORE_WEIGHTS as Record<string, { wAge: number; wLoan: number }>)[genre] ?? DEFAULT_USCORE_WEIGHT;
+}
 
 interface IdleScoreResult {
     score: number;
+    wAge: number;
+    wLoan: number;
     ageYears: number;
     ageApprox: boolean;
     ageContribution: number;
@@ -29,7 +49,6 @@ interface IdleScoreResult {
     loanApprox: boolean;
     loanContribution: number;
     sdecay: number;
-    decayContribution: number;
     isDecayFiltered: boolean;
 }
 
@@ -37,6 +56,7 @@ function computeIdleScore(book: Book): IdleScoreResult {
     const sage = book.sage ?? 0;
     const sloan = book.sloan ?? 0;
     const sdecay = book.sdecay ?? 0;
+    const { wAge, wLoan } = getUScoreWeights(book.genre);
 
     // Sage(i) = min(100, (Ai / Nmax) × 100)  →  Ai = (Sage / 100) × Nmax
     const ageYears = Math.round((sage / 100) * N_MAX * 10) / 10;
@@ -47,14 +67,13 @@ function computeIdleScore(book: Book): IdleScoreResult {
     const loanApprox = sloan <= 0;
 
     const score = Math.round(book.idleScore ?? 0);
-    const ageContribution = Math.round(W_AGE * sage);
-    const loanContribution = Math.round(W_LOAN * sloan);
-    const decayContribution = Math.round(W_DECAY * sdecay);
+    const ageContribution = Math.round(wAge * sage);
+    const loanContribution = Math.round(wLoan * sloan);
     const isDecayFiltered = sdecay >= DECAY_THRESHOLD;
 
     return {
-        score, ageYears, ageApprox, loanRate, loanApprox,
-        ageContribution, loanContribution, sdecay, decayContribution, isDecayFiltered,
+        score, wAge, wLoan, ageYears, ageApprox, loanRate, loanApprox,
+        ageContribution, loanContribution, sdecay, isDecayFiltered,
     };
 }
 
@@ -70,6 +89,8 @@ export function IdleScoreBar({ book }: { book: Book }) {
 
     const {
         score,
+        wAge,
+        wLoan,
         ageYears,
         ageApprox,
         ageContribution,
@@ -77,14 +98,12 @@ export function IdleScoreBar({ book }: { book: Book }) {
         loanApprox,
         loanContribution,
         sdecay,
-        decayContribution,
         isDecayFiltered,
     } = computeIdleScore(book);
 
-    // 세 기여도 값 자체가 100점 만점 중 실제 점유 폭(%)이므로 그대로 바 너비로 사용
+    // wAge + wLoan = 1 이므로 두 기여도의 합이 곧 100점 만점 중 실제 점유 폭(%)이 됨.
     const agePx = Math.round(ageContribution);
     const loanPx = Math.round(loanContribution);
-    const decayPx = Math.round(decayContribution);
 
     const computePosition = () => {
         const rect = triggerRef.current?.getBoundingClientRect();
@@ -119,21 +138,17 @@ export function IdleScoreBar({ book }: { book: Book }) {
         };
     }, [tooltipPos]);
 
+    // U-Score에 실제로 합산되는 두 지표만 포함 (가중치는 도서 장르의 KDC 대분류에 따라 달라짐)
     const rows = [
         {
-            label: "정보 노후도", weight: "×0.3",
+            label: "정보 노후도", weight: `×${wAge}`,
             raw: ageApprox ? "10년+" : `${ageYears}년`,
             contrib: `+${ageContribution}`, color: AMBER, bar: ageContribution,
         },
         {
-            label: "대출 저조도", weight: "×0.4",
+            label: "대출 저조도", weight: `×${wLoan}`,
             raw: loanApprox ? "2.0+건/년" : `${loanRate.toFixed(1)}건/년`,
             contrib: `+${loanContribution}`, color: BROWN, bar: loanContribution,
-        },
-        {
-            label: "대출 감소도", weight: "×0.3",
-            raw: `${sdecay.toFixed(1)}점`,
-            contrib: `+${decayContribution}`, color: RED, bar: decayContribution,
         },
     ];
 
@@ -153,7 +168,6 @@ export function IdleScoreBar({ book }: { book: Book }) {
                 <div className="w-20 h-3 bg-muted rounded-sm overflow-hidden flex flex-shrink-0">
                     <div style={{ width: `${agePx}%`, backgroundColor: AMBER }} />
                     <div style={{ width: `${loanPx}%`, backgroundColor: BROWN }} />
-                    <div style={{ width: `${decayPx}%`, backgroundColor: RED }} />
                 </div>
                 <span className="text-xs font-bold flex-shrink-0" style={{ color: NAV, fontFamily: "'JetBrains Mono', monospace" }}>
                     {score}
@@ -162,7 +176,7 @@ export function IdleScoreBar({ book }: { book: Book }) {
                     <span
                         className="w-1.5 h-1.5 rounded-full flex-shrink-0"
                         style={{ backgroundColor: RED }}
-                        title="최근 1년간 대출 급감 (보조 필터 대상)"
+                        title="과거 베스트셀러 → 현재 유휴 전환 (대출 감소도 보조 필터 대상)"
                     />
                 )}
             </div>
@@ -179,7 +193,7 @@ export function IdleScoreBar({ book }: { book: Book }) {
                 >
                     <p className="text-[11px] font-semibold text-foreground mb-2">유휴화 점수 구성 요소</p>
                     <p className="text-[9px] text-muted-foreground mb-2 leading-snug">
-                        ※ 정보 노후도 30% · 대출 저조도 40% · 대출 감소도 30% 가중 합산 값입니다.
+                        ※ 정보 노후도·대출 저조도 가중치는 도서 장르(KDC 대분류)마다 다르게 적용된 값입니다.
                     </p>
                     <div className="flex flex-col gap-1.5">
                         {rows.map((row) => (
@@ -209,9 +223,18 @@ export function IdleScoreBar({ book }: { book: Book }) {
                         <span className="text-[10px] font-semibold text-foreground">최종 점수</span>
                         <span className="text-xs font-bold" style={{ color: NAV, fontFamily: "'JetBrains Mono', monospace" }}>{score}점</span>
                     </div>
+                    <div className="mt-2 pt-2 border-t border-border">
+                        <div className="flex items-center justify-between mb-0.5">
+                            <span className="text-[10px] text-foreground font-medium">대출 감소도 <span className="text-[9px] text-muted-foreground">(보조 필터)</span></span>
+                            <span className="text-[10px] font-bold" style={{ color: RED, fontFamily: "'JetBrains Mono', monospace" }}>{sdecay.toFixed(1)}점</span>
+                        </div>
+                        <p className="text-[9px] text-muted-foreground leading-snug">
+                            U-Score 합산에는 포함되지 않으며, {DECAY_THRESHOLD}점 이상이면 "과거 베스트셀러 → 현재 유휴 전환" 패턴으로 별도 태깅됩니다.
+                        </p>
+                    </div>
                     {isDecayFiltered && (
                         <p className="mt-2 pt-2 border-t border-border text-[9px] text-muted-foreground leading-snug">
-                            최근 1년간 대출 급감이 감지되어 보조 필터(Sdecay ≥ 90) 대상으로 표시되었습니다.
+                            최근 1년간 대출 급감이 감지되어 보조 필터(Sdecay ≥ {DECAY_THRESHOLD}) 대상으로 표시되었습니다.
                         </p>
                     )}
                 </div>,

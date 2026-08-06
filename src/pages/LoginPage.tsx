@@ -37,6 +37,7 @@ const PROCESS_STEPS = [
   { n: "01", text: "유휴 도서 파손 점검" },
   { n: "02", text: "이관 · 보관 · 폐기 결정" },
   { n: "03", text: "이관 도서 우선순위 배정" },
+  { n: "04", text: "폐기 도서 상한 검증" },
 ];
 
 export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) {
