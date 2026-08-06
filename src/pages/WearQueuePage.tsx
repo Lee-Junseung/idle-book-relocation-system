@@ -201,10 +201,14 @@ export function WearQueuePage({
     }
 
     const targetId = checklistTarget.id;
+    if (checklistTarget.resultId === undefined) {
+      setSaveError({ message: "점검 대상 정보가 올바르지 않습니다. 목록을 새로고침한 후 다시 시도해 주세요." });
+      return;
+    }
     setSaving(true);
     setSaveError(null);
     try {
-      const body = buildChecklistRegisterRequest(targetId, insp, librarianCode);
+      const body = buildChecklistRegisterRequest(checklistTarget.resultId, insp, librarianCode);
       await registerChecklistApi(body);
 
       setInspections((prev) => ({ ...prev, [targetId]: insp }));

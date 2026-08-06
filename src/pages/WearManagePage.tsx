@@ -278,8 +278,9 @@ export function WearManagePage({
   const toggleSel = (id: string) => {
     setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   };
-  const allSel = filtered.length > 0 && filtered.every((b) => selected.has(b.id));
-  const toggleAll = () => allSel ? setSelected(new Set()) : setSelected(new Set(filtered.map((b) => b.id)));
+  const selectableBooks = filtered.filter((b) => b.status === "대기");
+  const allSel = selectableBooks.length > 0 && selectableBooks.every((b) => selected.has(b.id));
+  const toggleAll = () => allSel ? setSelected(new Set()) : setSelected(new Set(selectableBooks.map((b) => b.id)));
 
   const toggleSort = (k: keyof Book) => {
     if (sortKey === k) setSortDir((d) => d === "asc" ? "desc" : "asc");
@@ -502,7 +503,6 @@ export function WearManagePage({
                       { key: "title", label: "제목 / 저자", hide: "", sortable: false },
                       { key: "genre", label: "장르", hide: "hidden md:table-cell", sortable: false },
                       { key: "damage", label: "마모 수준", hide: "", sortable: true },
-                      { key: "turnover", label: "연 대출률", hide: "hidden xl:table-cell", sortable: true },
                     ] as { key: keyof Book; label: string; hide: string; sortable: boolean }[]).map(({ key, label, hide, sortable }) => (
                       <th key={key} onClick={sortable ? () => toggleSort(key) : undefined}
                         className={`px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap ${sortable ? "cursor-pointer select-none" : ""} ${hide}`}>
@@ -535,7 +535,7 @@ export function WearManagePage({
                             ${done ? "opacity-70" : ""}`}
                           style={isActive ? { borderBottom: "none", borderLeft: `2px solid ${NAV}` } : {}}>
                           <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                            <input type="checkbox" checked={isSel} onChange={() => toggleSel(book.id)} className="rounded accent-primary" />
+                            <input type="checkbox" checked={isSel} disabled={done} onChange={() => toggleSel(book.id)} className="rounded accent-primary" />
                           </td>
                           <td className="px-4 py-3 max-w-[230px]">
                             <p className="text-sm font-medium text-foreground truncate">{book.title}</p>
@@ -543,7 +543,6 @@ export function WearManagePage({
                           </td>
                           <td className="hidden md:table-cell px-4 py-3 text-sm text-muted-foreground max-w-[100px] truncate">{book.genre}</td>
                           <td className="px-4 py-3"><DamageTooltipCell book={book} /></td>
-                          <td className="hidden xl:table-cell px-4 py-3 text-sm text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{book.turnover.toFixed(1)}/yr</td>
                           <td className="px-4 py-3">
                             {book.status === "대기" ? (
                               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded border text-xs font-medium text-muted-foreground border-border bg-muted/40 whitespace-nowrap">
@@ -568,13 +567,13 @@ export function WearManagePage({
                           </td>
                           <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
-                              <button disabled={book.status === "폐기승인"} onClick={() => requestAction(book, "폐기승인")}
+                              <button disabled={done} onClick={() => requestAction(book, "폐기승인")}
                                 className="flex items-center gap-1 px-2 py-1.5 rounded text-white text-xs font-medium hover:opacity-80 active:scale-95 disabled:opacity-25 disabled:cursor-not-allowed whitespace-nowrap"
                                 style={{ backgroundColor: RED }}><Trash2 className="w-3.5 h-3.5 flex-shrink-0" /><span className="hidden sm:inline">폐기</span></button>
-                              <button disabled={book.status === "이관승인"} onClick={() => requestAction(book, "이관승인")}
+                              <button disabled={done} onClick={() => requestAction(book, "이관승인")}
                                 className="flex items-center gap-1 px-2 py-1.5 rounded text-white text-xs font-medium hover:opacity-80 active:scale-95 disabled:opacity-25 disabled:cursor-not-allowed whitespace-nowrap"
                                 style={{ backgroundColor: PURPLE }}><MoveRight className="w-3.5 h-3.5 flex-shrink-0" /><span className="hidden sm:inline">이관</span></button>
-                              <button disabled={book.status === "보존결정"} onClick={() => requestAction(book, "보존결정")}
+                              <button disabled={done} onClick={() => requestAction(book, "보존결정")}
                                 className="flex items-center gap-1 px-2 py-1.5 rounded text-white text-xs font-medium hover:opacity-80 active:scale-95 disabled:opacity-25 disabled:cursor-not-allowed whitespace-nowrap"
                                 style={{ backgroundColor: "#4A4335" }}><BookMarked className="w-3.5 h-3.5 flex-shrink-0" /><span className="hidden sm:inline">보존</span></button>
                             </div>
@@ -583,7 +582,7 @@ export function WearManagePage({
 
                         {isActive && (
                           <tr key={`panel-${book.id}`} style={{ borderLeft: `2px solid ${NAV}` }}>
-                            <td colSpan={8} className="px-0 pb-0">
+                            <td colSpan={7} className="px-0 pb-0">
                               <div className="px-4 py-4 border-b border-border" style={{ backgroundColor: withAlpha(NAV, 0.02) }}>
                                 <div className="flex items-center justify-between mb-3 gap-2">
                                   <div className="flex items-center gap-2 min-w-0">
@@ -679,7 +678,7 @@ export function WearManagePage({
                     );
                   })}
                   {paginated.length === 0 && (
-                    <tr><td colSpan={8} className="py-16 text-center text-sm text-muted-foreground">조건에 해당하는 도서가 없습니다.</td></tr>
+                    <tr><td colSpan={7} className="py-16 text-center text-sm text-muted-foreground">조건에 해당하는 도서가 없습니다.</td></tr>
                   )}
                 </tbody>
               </table>

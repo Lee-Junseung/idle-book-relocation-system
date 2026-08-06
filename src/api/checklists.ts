@@ -36,7 +36,8 @@ export const getChecklistListApi = (
 
 export function mapToBook(item: ChecklistListItem): Book {
     return {
-        id: String(item.resultId),
+        id: String(item.bookId),
+        resultId: item.resultId,
         title: item.bookTitle,
         author: item.author,
         isbn: item.isbn,
@@ -62,7 +63,7 @@ export const registerChecklistApi = (
 
 // isPassed 기준(1~2점=양호)
 export function buildChecklistRegisterRequest(
-    bookId: string,
+    resultId: number,
     insp: DamageInspection,
     librarianCode: string
 ): ChecklistRegisterRequest {
@@ -75,7 +76,7 @@ export function buildChecklistRegisterRequest(
     const totalScore = checkResults.reduce((sum, r) => sum + r.itemScore, 0);
 
     return {
-        resultId: Number(bookId),
+        resultId,
         librarianCode,
         checkedDate: insp.date,
         totalScore,

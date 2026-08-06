@@ -27,6 +27,7 @@ export interface Book {
   sage?: number;
   sloan?: number;
   sdecay?: number;
+  resultId?: number
 }
 
 export interface Branch {

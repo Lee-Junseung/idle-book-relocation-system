@@ -31,6 +31,7 @@ function buildMockItem(index: number): ChecklistListItem {
     const h = hashCode(`checklist-${index}`);
     return {
         resultId: index + 1,
+        bookId: 1000 + index,
         isbn: String(1000 + index),
         bookTitle: base.bookTitle,
         author: base.author,
@@ -85,6 +86,7 @@ export const registerChecklistApiMock = (
         message: "도서 점검 결과가 성공적으로 저장되었습니다.",
         data: {
             resultBatchId: hashCode(`${body.resultId}-${body.checkedDate}`),
+            bookId: 1000 + (body.resultId - 1), // buildMockItem의 resultId→bookId 규칙과 동일하게 역산
             totalScore: body.totalScore,
             checkedAt: new Date().toISOString(),
         },

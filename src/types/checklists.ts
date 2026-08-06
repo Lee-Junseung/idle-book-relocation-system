@@ -20,6 +20,7 @@ export interface ChecklistPageInfo {
 // GET /api/checklists 의 data 배열 원소 — 도서 1건의 유휴화 점수 산정 결과
 export interface ChecklistListItem {
     resultId: number;
+    bookId: number;
     isbn: string;
     bookTitle: string;
     author: string;
@@ -59,6 +60,7 @@ export interface ChecklistRegisterResponse {
     message: string;
     data: {
         resultBatchId: number;
+        bookId: number;
         totalScore: number;
         checkedAt: string;
     };
