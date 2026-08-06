@@ -171,8 +171,8 @@ export type ConfirmDecisionsResponse = ConfirmDecisionData[];
 // 9. 도서 월별 대출 추이 조회
 // GET /api/checklists/books/{bookId}/loans/monthly
 export interface MonthlyLoanTrendItem {
-  yearMonth: string; // "2025-08"
-  loanCount: number;
+  month: string; // "YY.MM" 형식, 예: "25.07" = 2025년 7월
+  v: number; // 해당 월 실제 대출 건수 (0 이상)
 }
 
 export type MonthlyLoanTrendResponse = ApiEnvelope<MonthlyLoanTrendItem[]>;

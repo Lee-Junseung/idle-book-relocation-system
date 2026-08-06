@@ -12,7 +12,6 @@ import {
     CompletedChecklistListResponse,
     ConfirmDecisionData,
     ConfirmDecisionRequest,
-    ConfirmDecisionResponse,
     ConfirmDecisionsRequest,
     ConfirmDecisionsResponse,
     CreateCheckItemRequest,
@@ -147,11 +146,10 @@ export const confirmDecisionApi = async (
     body: ConfirmDecisionRequest
 ): Promise<ConfirmDecisionData> => {
     if (USE_MOCK) return confirmDecisionApiMock(resultBatchId, body);
-    const envelope = await apiPut<ConfirmDecisionResponse>(
+    return apiPut<ConfirmDecisionData>(
         `/api/checklists/results/${resultBatchId}/decision`,
         body
     );
-    return envelope.data;
 };
 
 // 폐기/이관/보존 결정 확정 (일괄) — PUT /api/checklists/results/decisions

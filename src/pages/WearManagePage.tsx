@@ -166,15 +166,11 @@ export function WearManagePage({
       .finally(() => setMonthlyLoanLoading(false));
   }, [panelBook]);
 
-  // API의 "yyyy-MM" 형식을 차트 라벨("yy.MM")로 변환하고, 월 순서대로 정렬함.
-  const monthlyChartData = useMemo(() => {
-    return [...monthlyLoanData]
-      .sort((a, b) => a.yearMonth.localeCompare(b.yearMonth))
-      .map((item) => ({
-        month: item.yearMonth.length === 7 ? item.yearMonth.slice(2).replace("-", ".") : item.yearMonth,
-        v: item.loanCount,
-      }));
-  }, [monthlyLoanData]);
+  // month 빈 값만 방어적으로 필터
+  const monthlyChartData = useMemo(
+    () => monthlyLoanData.filter((item) => !!item.month),
+    [monthlyLoanData]
+  );
 
   const inspectedBooks = books.filter((b) => !!resultBatchByBookId[b.id]);
 

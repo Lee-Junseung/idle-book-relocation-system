@@ -251,21 +251,21 @@ export const MOCK_BOOK_LOAN_HISTORY: Record<string, LoanHistoryPoint[]> = {
 };
 
 // 도서 월별 대출 추이 조회 (GET /api/checklists/books/{bookId}/loans/monthly)
-// 최근 12개월(2025-08 ~ 2026-07)치를 bookId 기반 결정적 해시로 생성합니다.
-const MONTHLY_TREND_YEAR_MONTHS = [
-    "2025-08", "2025-09", "2025-10", "2025-11", "2025-12",
-    "2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07",
+// 최근 12개월(25.08 ~ 26.07)치를 bookId 기반 결정적 해시로 생성합니다. (오래된 달 → 최근 달 순)
+const MONTHLY_TREND_MONTH_LABELS = [
+    "25.08", "25.09", "25.10", "25.11", "25.12",
+    "26.01", "26.02", "26.03", "26.04", "26.05", "26.06", "26.07",
 ];
 
 export const getMonthlyLoanTrendApiMock = async (bookId: number): Promise<MonthlyLoanTrendItem[]> => {
     if (NON_EXISTENT_BOOK_IDS.has(bookId)) {
         throw new ApiError(NOT_FOUND_MESSAGE, 500);
     }
-    const base = 2 + (hashCode(`loan-base-${bookId}`) % 8); // 2~9건 기준선
-    const data = MONTHLY_TREND_YEAR_MONTHS.map((yearMonth, i) => {
+    const base = 2 + (hashCode(`loan-base-${bookId}`) % 8);
+    const data = MONTHLY_TREND_MONTH_LABELS.map((month, i) => {
         const seed = hashCode(`loan-${bookId}-${i}`);
-        const jitter = (seed % 5) - 2; // -2 ~ +2
-        return { yearMonth, loanCount: Math.max(0, base + jitter) };
+        const jitter = (seed % 5) - 2;
+        return { month, v: Math.max(0, base + jitter) };
     });
     return mockDelay(data);
 };
