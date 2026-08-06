@@ -225,16 +225,13 @@ export function IdleScoreBar({ book }: { book: Book }) {
                     </div>
                     <div className="mt-2 pt-2 border-t border-border">
                         <div className="flex items-center justify-between mb-0.5">
-                            <span className="text-[10px] text-foreground font-medium">대출 감소도 <span className="text-[9px] text-muted-foreground">(보조 필터)</span></span>
+                            <span className="text-[10px] text-foreground font-medium">대출 감소도</span>
                             <span className="text-[10px] font-bold" style={{ color: RED, fontFamily: "'JetBrains Mono', monospace" }}>{sdecay.toFixed(1)}점</span>
                         </div>
-                        <p className="text-[9px] text-muted-foreground leading-snug">
-                            U-Score 합산에는 포함되지 않으며, {DECAY_THRESHOLD}점 이상이면 "과거 베스트셀러 → 현재 유휴 전환" 패턴으로 별도 태깅됩니다.
-                        </p>
                     </div>
                     {isDecayFiltered && (
-                        <p className="mt-2 pt-2 border-t border-border text-[9px] text-muted-foreground leading-snug">
-                            최근 1년간 대출 급감이 감지되어 보조 필터(Sdecay ≥ {DECAY_THRESHOLD}) 대상으로 표시되었습니다.
+                        <p className="mt-2 pt-2 border-border text-[9px] text-muted-foreground leading-snug">
+                            최근 1년간 대출 급감이 감지되었습니다. (대출 감소도 ≥ {DECAY_THRESHOLD})
                         </p>
                     )}
                 </div>,

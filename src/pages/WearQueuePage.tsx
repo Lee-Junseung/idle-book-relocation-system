@@ -369,8 +369,15 @@ export function WearQueuePage({
               </tbody>
             </table>
           </div>
-          <div className="px-4 py-3 border-t border-border bg-muted/20 flex items-center justify-between flex-wrap gap-2">
-            <span className="text-sm text-muted-foreground">유휴화 점수(U-Score) = (KDC별 정보 노후도 가중치 X 정보 노후도) + (KDC별 대출 저조도 가중치 X 대출 저조도) · 대출 감소도는 보조 필터(≥90)로 별도 적용</span>
+          <div className="px-4 py-3 border-border bg-muted/20 flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+              <span className="font-semibold uppercase tracking-wide whitespace-nowrap">
+                유휴화 점수 산출식:
+              </span>
+              <span>
+                U-Score = (KDC별 정보 노후도 가중치 × 정보 노후도) + (KDC별 대출 저조도 가중치 × 대출 저조도)
+              </span>
+            </div>
             {pageInfo.totalPages > 1 && (() => {
               const WINDOW = 5;
               const start = Math.floor(page / WINDOW) * WINDOW;

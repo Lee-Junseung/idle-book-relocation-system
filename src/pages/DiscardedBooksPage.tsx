@@ -1,6 +1,6 @@
 // 폐기 확정 도서 목록 + 도서관법 시행령 [별표 7] 제3호(연간 폐기 상한: 전체 장서의 100분의 7) 준수 현황 페이지
 import { useEffect, useMemo, useState } from "react";
-import { Trash2, Search, Loader2, AlertTriangle, Gauge, ShieldAlert, ShieldCheck, Archive, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react";
+import { Trash2, Search, Loader2, AlertTriangle, Gauge, ShieldAlert, ShieldCheck, Archive, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, ListFilter } from "lucide-react";
 
 import { Card, SectionHeader, MetricCard, withAlpha } from "../components";
 import { NAV, RED, AMBER, GREEN, BLUE } from "../constants/colors";
@@ -150,8 +150,17 @@ export function DiscardedBooksPage() {
       )}
 
       <Card className="p-4">
-        <div className="flex flex-wrap items-start gap-4">
-          <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          {/* 좌측 영역: 필터 아이콘/문구 + 검색창 + 쿼타 현황 */}
+          <div className="flex flex-wrap items-center gap-4 flex-1 min-w-[240px]">
+
+            {/* 1. 새로 추가된 [필터] 아이콘 및 문구 (맨 왼쪽) */}
+            <div className="flex items-center gap-1.5 text-sm text-muted-foreground whitespace-nowrap">
+              <ListFilter className="w-4 h-4" />
+              <span>필터</span>
+            </div>
+
+            {/* 2. 검색창 */}
             <div className="relative">
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input
@@ -162,35 +171,40 @@ export function DiscardedBooksPage() {
                 className="pl-8 pr-3 py-2 text-sm rounded-md border border-border bg-background w-56 focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>
-            <span className="text-sm text-muted-foreground">{filtered.length} / {books.length}건</span>
+
+            {/* 3. 쿼타 현황 */}
+            {quota && (
+              <div className="w-full sm:w-auto sm:min-w-[280px] max-w-xs flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-foreground">상한 대비 처리 현황</span>
+                  <span className="text-xs font-semibold whitespace-nowrap" style={{ color: tone!.color, fontFamily: "'JetBrains Mono', monospace" }}>
+                    {quota.discardedCount.toLocaleString()}/{quota.capCount.toLocaleString()} ({progressPct}%) · {tone!.label}
+                  </span>
+                </div>
+                <div className="h-2 rounded-full w-full overflow-hidden" style={{ backgroundColor: withAlpha(tone!.color, 0.13) }}>
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{ width: `${progressPct}%`, backgroundColor: tone!.color }}
+                  />
+                </div>
+                {quota.capReached && (
+                  <p className="text-xs mt-0.5" style={{ color: RED }}>
+                    연간 폐기 상한 도달로 신규 폐기 확정이 서버에서 거부됩니다. 초과가 필요하면 운영위원회 심의가 필요합니다 (시행령 [별표 7] 제3호 단서).
+                  </p>
+                )}
+                {!quota.capReached && tone!.label === "상한 임박" && (
+                  <p className="text-xs mt-0.5" style={{ color: AMBER }}>
+                    연간 폐기 상한의 85% 이상을 사용했습니다. 상한 도달 시 신규 폐기 확정이 서버에서 거부되니 잔여 건수를 미리 확인해 주세요.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
-          {quota && (
-            <div className="ml-auto w-full sm:w-auto sm:min-w-[280px] max-w-xs flex flex-col gap-1.5 pl-4 border-l border-border">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-medium text-foreground">상한 대비 처리 현황</span>
-                <span className="text-xs font-semibold whitespace-nowrap" style={{ color: tone!.color, fontFamily: "'JetBrains Mono', monospace" }}>
-                  {quota.discardedCount.toLocaleString()}/{quota.capCount.toLocaleString()} ({progressPct}%) · {tone!.label}
-                </span>
-              </div>
-              <div className="h-2 rounded-full w-full overflow-hidden" style={{ backgroundColor: withAlpha(tone!.color, 0.13) }}>
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{ width: `${progressPct}%`, backgroundColor: tone!.color }}
-                />
-              </div>
-              {quota.capReached && (
-                <p className="text-xs mt-0.5" style={{ color: RED }}>
-                  연간 폐기 상한 도달로 신규 폐기 확정이 서버에서 거부됩니다. 초과가 필요하면 운영위원회 심의가 필요합니다 (시행령 [별표 7] 제3호 단서).
-                </p>
-              )}
-              {!quota.capReached && tone!.label === "상한 임박" && (
-                <p className="text-xs mt-0.5" style={{ color: AMBER }}>
-                  연간 폐기 상한의 85% 이상을 사용했습니다. 상한 도달 시 신규 폐기 확정이 서버에서 거부되니 잔여 건수를 미리 확인해 주세요.
-                </p>
-              )}
-            </div>
-          )}
+          {/* 우측 영역: 건수 표기 (오른쪽 밀착) */}
+          <span className="text-sm text-muted-foreground whitespace-nowrap ml-auto">
+            {filtered.length} / {books.length}건
+          </span>
         </div>
       </Card>
 
