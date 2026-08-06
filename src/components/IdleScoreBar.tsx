@@ -124,6 +124,7 @@ export function IdleScoreBar({ book }: { book: Book }) {
 
     const hideTooltip = () => setTooltipPos(null);
     const toggleTooltip = () => (tooltipPos ? hideTooltip() : computePosition());
+    const isTooltipOpen = tooltipPos !== null;
 
     useEffect(() => {
         if (!tooltipPos) return;
@@ -137,6 +138,20 @@ export function IdleScoreBar({ book }: { book: Book }) {
             document.removeEventListener("mousedown", handleOutside);
         };
     }, [tooltipPos]);
+
+    // 툴팁이 열려 있는 동안 스크롤이 일어나면(페이지 전체든, 테이블처럼 내부 스크롤 컨테이너든)
+    // 트리거 요소의 화면상 좌표가 바뀌므로 매번 다시 계산해서 툴팁이 항상 트리거를 따라가게 한다.
+    // 스크롤 이벤트는 버블링되지 않으므로 document에 캡처 단계로 리스너를 걸어야
+    // 내부 스크롤 컨테이너(예: overflow-x-auto 테이블 래퍼)의 스크롤도 감지할 수 있다.
+    // 의존성 배열을 tooltipPos 전체가 아닌 isTooltipOpen(boolean)으로 둬서, 스크롤 중
+    // computePosition이 tooltipPos를 갱신할 때마다 리스너가 매번 해제/재등록되는 것을 방지한다.
+    useEffect(() => {
+        if (!isTooltipOpen) return;
+        const handleScroll = () => computePosition();
+        document.addEventListener("scroll", handleScroll, { capture: true, passive: true });
+        return () => document.removeEventListener("scroll", handleScroll, { capture: true });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isTooltipOpen]);
 
     // U-Score에 실제로 합산되는 두 지표만 포함 (가중치는 도서 장르의 KDC 대분류에 따라 달라짐)
     const rows = [

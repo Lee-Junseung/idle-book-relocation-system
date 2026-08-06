@@ -1,5 +1,5 @@
 // 점검 리스트 등록이 완료된 도서를 필터/정렬하고, 폐기·이관·보존을 결정 확정하는 페이지
-import { useState, useMemo, useEffect } from "react";
+import { Fragment, useState, useMemo, useEffect } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import {
   Trash2, MoveRight, BookMarked,
@@ -166,7 +166,8 @@ export function WearManagePage({
       .finally(() => setMonthlyLoanLoading(false));
   }, [panelBook]);
 
-  // month 빈 값만 방어적으로 필터
+  // API가 이미 "YY.MM" 라벨(month)과 건수(v)를 오래된 달 → 최근 달 순으로 정렬해 내려주므로
+  // 별도 변환/정렬 없이 그대로 쓴다. month가 비어 있는 항목만 방어적으로 걸러낸다.
   const monthlyChartData = useMemo(
     () => monthlyLoanData.filter((item) => !!item.month),
     [monthlyLoanData]
@@ -175,9 +176,11 @@ export function WearManagePage({
   const inspectedBooks = books.filter((b) => !!resultBatchByBookId[b.id]);
 
   const filtered = useMemo(() => {
+    // 이관승인/폐기승인 처리가 완료된 도서는 리스트에서 완전히 제외한다 (보존결정은 그대로 유지)
     let list = books.filter((b) =>
       b.branch === branchFilter &&
       !!resultBatchByBookId[b.id] &&
+      b.status !== "이관승인" && b.status !== "폐기승인" &&
       (genreFilter === "전체 장르" || b.genre === genreFilter) &&
       b.damage >= damageMin &&
       (search === "" || b.title.includes(search) || b.isbn.includes(search) || b.id.includes(search))
@@ -230,8 +233,8 @@ export function WearManagePage({
 
     setDecisionSaving(true);
 
-    // 성공한 도서의 id -> 서버가 응답으로 내려준 decidedAt(ISO 8601). 화면 반영 시 이 값을 그대로 사용합니다
-    // (클라이언트에서 보낸 decidedDate는 서버가 실제로 반영한 시각과 다를 수 있으므로 신뢰하지 않습니다).
+    // 성공한 도서의 id -> 서버가 응답으로 내려준 decidedAt(ISO 8601). 화면 반영 시 이 값을 우선 사용하되,
+    // 서버 응답에 decidedAt이 없는 경우(필드명 불일치/누락 등) 크래시 대신 클라이언트가 보낸 decidedDate로 대체합니다.
     let succeededEntries: { id: string; decidedAt: string }[] = [];
     let failedCount = skipped.length;
     let errorMessage: string | undefined;
@@ -249,7 +252,7 @@ export function WearManagePage({
           (e): e is { id: string; result: PromiseFulfilledResult<Awaited<ReturnType<typeof confirmDecisionApi>>> } =>
             e.result.status === "fulfilled"
         )
-        .map((e) => ({ id: e.id, decidedAt: e.result.value.decidedAt }));
+        .map((e) => ({ id: e.id, decidedAt: e.result.value.decidedAt ?? decidedDate }));
       failedCount += targets.length - succeededEntries.length;
       const firstError = results.find((r) => r.status === "rejected") as PromiseRejectedResult | undefined;
       errorMessage = firstError?.reason instanceof ApiError ? firstError.reason.message : undefined;
@@ -261,7 +264,7 @@ export function WearManagePage({
         });
         succeededEntries = targets.flatMap((id) => {
           const match = response.find((r) => r.resultBatchId === resultBatchByBookId[id]);
-          return match ? [{ id, decidedAt: match.decidedAt }] : [];
+          return match ? [{ id, decidedAt: match.decidedAt ?? decidedDate }] : [];
         });
         failedCount += targets.length - succeededEntries.length;
       } catch (err) {
@@ -510,7 +513,7 @@ export function WearManagePage({
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input type="text" placeholder="제목 / ISBN…" value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-50 pl-8 pr-3 py-2 text-sm rounded-md border border-border bg-background w-44 focus:outline-none focus:ring-2 focus:ring-primary/40" />
+                className="w-44 pl-8 pr-3 py-2 text-sm rounded-md border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40" />
             </div>
           </div>
           <div className="flex flex-col gap-1">
@@ -579,8 +582,8 @@ export function WearManagePage({
                     const isActive = panelBook?.id === book.id;
 
                     return (
-                      <>
-                        <tr key={`row-${book.id}`}
+                      <Fragment key={book.id}>
+                        <tr
                           onClick={() => setPanelBook(isActive ? null : book)}
                           className={`border-b transition-colors cursor-pointer
                             ${isActive ? "" : "border-border"}
@@ -675,7 +678,7 @@ export function WearManagePage({
                                               axisLine={false} tickLine={false}
                                               domain={[0, "dataMax + 1"]} allowDecimals={false} />
                                             <Tooltip
-                                              formatter={(v: number) => [`${v}건`, "월간 대출"]}
+                                              formatter={(v) => [`${typeof v === "number" ? v : 0}건`, "월간 대출"]}
                                               labelFormatter={(l) => l}
                                               contentStyle={{ fontSize: 11, borderRadius: 4, border: "1px solid #E5E7EB", padding: "2px 8px" }}
                                             />
@@ -692,7 +695,8 @@ export function WearManagePage({
                                     <div className="flex items-center justify-between mb-2 gap-2">
                                       <p className="text-sm font-semibold text-foreground">마모 판단 근거</p>
                                       <button onClick={(e) => { e.stopPropagation(); setChecklistTarget(book); }}
-                                        disabled={detailLoading || !!detailError || !bookDetail}
+                                        disabled={detailLoading || !!detailError || !bookDetail || book.status !== "대기"}
+                                        title={book.status !== "대기" ? "이미 처리 결정이 확정된 도서는 점검 결과를 수정할 수 없습니다." : undefined}
                                         className="flex items-center gap-1 text-xs font-medium px-2 py-1 rounded border transition-colors hover:bg-muted/40 disabled:opacity-40 disabled:cursor-not-allowed"
                                         style={{ borderColor: withAlpha(NAV, 0.25), color: NAV }}>
                                         <ClipboardEdit className="w-3.5 h-3.5" /> 점검 수정
@@ -738,7 +742,7 @@ export function WearManagePage({
                             </td>
                           </tr>
                         )}
-                      </>
+                      </Fragment>
                     );
                   })}
                   {paginated.length === 0 && (

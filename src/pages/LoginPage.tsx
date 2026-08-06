@@ -52,7 +52,7 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
   const [loginId, setLoginId] = useState(() => {
     try { return localStorage.getItem(REMEMBER_ID_KEY) ?? ""; } catch { return ""; }
   });
-  const [rememberId, setRememberId] = useState(() => {
+  const [rememberId] = useState(() => {
     try { return !!localStorage.getItem(REMEMBER_ID_KEY); } catch { return false; }
   });
   const [loginPw, setLoginPw] = useState("");
@@ -241,14 +241,15 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
               }
             />
 
-            <div className="flex items-center justify-between -mt-1">
+            {/* 아이디 저장 / 아이디 · 비밀번호 찾기 버튼 */}
+            {/* <div className="flex items-center justify-between -mt-1">
               <label className="flex items-center gap-2 select-none cursor-pointer">
                 <input type="checkbox" checked={rememberId} onChange={(e) => setRememberId(e.target.checked)}
                   className="w-3.5 h-3.5 rounded-sm accent-primary" />
                 <span className="text-sm text-muted-foreground">아이디 저장</span>
               </label>
               <span className="text-sm text-muted-foreground">아이디 · 비밀번호 찾기</span>
-            </div>
+            </div> */}
 
             {/* 에러 영역: 항상 렌더링되어 있어 메시지 유무와 상관없이 높이가 고정됨 */}
             <div className="min-h-[16px] flex items-center">

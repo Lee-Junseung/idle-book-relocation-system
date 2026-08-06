@@ -13,7 +13,7 @@ const MOCK_ACCOUNT = {
     password: "admin",
     name: "지형곤",
     email: "test@example.com",
-    nickname: "택훈아버님",
+    nickname: "택훈",
     librarianCode: "LIB-00001",
     accessToken: "mock-access-token",
 };

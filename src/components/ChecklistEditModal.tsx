@@ -191,6 +191,12 @@ export function ChecklistEditModal({
               placeholder="점검자 이름을 입력하세요"
               className="px-3.5 py-2.5 text-sm rounded-md border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40" />
           </div>
+
+          {book.status !== "대기" && (
+            <p className="text-xs text-muted-foreground -mt-3">
+              이미 처리 결정이 확정된 도서입니다. 점검 결과를 열람할 수는 있지만 저장할 수 없습니다.
+            </p>
+          )}
         </div>
 
         <div className="px-5 py-4 border-t border-border flex items-center justify-end gap-2 flex-shrink-0">

@@ -2,12 +2,17 @@
 // 로그인 게이트, 사이드바 네비게이션(모바일 탭 토글 지원), 헤더, 페이지 라우팅(개요/마모 점검/마모 처리/이관 우선순위)을 담당.
 import { useEffect, useState } from "react";
 import {
-  LayoutDashboard, BookOpen, ArrowLeftRight, Bell, Settings, LogOut,
+  LayoutDashboard, BookOpen, ArrowLeftRight, LogOut,
   ChevronRight, Pin, Building2, CalendarClock, ClipboardCheck, Menu, Trash2,
   type LucideIcon,
 } from "lucide-react";
+// 사용하지 않는 알림(Bell)/설정(Settings) 아이콘 import 제거
+// import { Bell, Settings } from "lucide-react";
 
-import { NAV, RED } from "./constants/colors";
+import { NAV } from "./constants/colors";
+// 알림 배지(RED) 삭제로 더 이상 쓰이지 않는 RED import 제거
+// import { RED } from "./constants/colors";
+
 import { CURRENT_LIBRARY } from "./constants/library";
 import { PageId, Session, Book, BookStatus, DamageInspection } from "./types";
 import { loadSession, logout } from "./api/session";
@@ -55,12 +60,13 @@ const NAV_ITEMS: NavItem[] = [
   { id: "discarded", label: "폐기 도서 현황", sub: "폐기 도서 상한 관리", icon: Trash2 },
 ];
 
-interface QuickAction {
-  icon: LucideIcon;
-  label: string;
-  badge?: number;
-  onClick: () => void;
-}
+// 알림/설정 버튼 삭제로 더 이상 쓰이지 않는 QuickAction 인터페이스 제거
+// interface QuickAction {
+//   icon: LucideIcon;
+//   label: string;
+//   badge?: number;
+//   onClick: () => void;
+// }
 
 function withAlpha(hex: string, alpha: number): string {
   const clean = hex.replace("#", "");
@@ -120,10 +126,11 @@ export default function App() {
   const visibility = labelVisibility(sidebarPinned);
   const toggleSidebar = () => setSidebarPinned((v) => !v);
 
-  const quickActions: QuickAction[] = [
-    { icon: Bell, label: "알림", onClick: toggleSidebar },
-    { icon: Settings, label: "설정", onClick: toggleSidebar },
-  ];
+  // 알림/설정 버튼(quickActions) 미사용으로 제거
+  // const quickActions: QuickAction[] = [
+  //   { icon: Bell, label: "알림", onClick: toggleSidebar },
+  //   { icon: Settings, label: "설정", onClick: toggleSidebar },
+  // ];
 
   return (
     <div className="flex h-screen w-full overflow-hidden">
@@ -218,7 +225,8 @@ export default function App() {
         </nav>
 
         <div className="py-3.5 border-t border-sidebar-border flex flex-col gap-1">
-          {quickActions.map(({ icon: Icon, label, badge, onClick }) => (
+          {/* 알림/설정 퀵액션 버튼 렌더링 블록 제거 (미사용) */}
+          {/* {quickActions.map(({ icon: Icon, label, badge, onClick }) => (
             <button key={label} title={label} onClick={(e) => { e.stopPropagation(); onClick(); }}
               className="flex items-center gap-2.5 px-3 h-11 rounded-md w-full text-left hover:bg-sidebar-accent transition-colors text-sidebar-foreground/70 cursor-pointer">
               <div className="relative w-8 h-8 flex items-center justify-center flex-shrink-0">
@@ -227,7 +235,7 @@ export default function App() {
               </div>
               <span className={`text-sm whitespace-nowrap ${visibility}`}>{label}</span>
             </button>
-          ))}
+          ))} */}
 
           <button title="로그아웃" onClick={(e) => { e.stopPropagation(); logout(); setSession(null); }}
             className="flex items-center gap-2.5 px-3 h-11 rounded-md w-full text-left hover:bg-sidebar-accent transition-colors text-sidebar-foreground/70 cursor-pointer">
@@ -275,7 +283,7 @@ export default function App() {
 
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6">
           {page === "overview" && <OverviewPage />}
-          {page === "wear-queue" && <WearQueuePage books={books} setBooks={setBooks} inspections={inspections} setInspections={setInspections} inspectorName={session.name} librarianCode={session.librarianId} setActivePage={setPage} />}
+          {page === "wear-queue" && <WearQueuePage books={books} setBooks={setBooks} inspections={inspections} setInspections={setInspections} inspectorName={session.name} librarianCode={session.librarianId} />}
           {page === "wear-manage" && <WearManagePage books={books} setBooks={setBooks} inspectorName={session.name} librarianCode={session.librarianId} />}
           {page === "relocation" && <RelocationPage />}
           {page === "discarded" && <DiscardedBooksPage />}

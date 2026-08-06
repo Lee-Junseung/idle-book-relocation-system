@@ -261,10 +261,10 @@ export const getMonthlyLoanTrendApiMock = async (bookId: number): Promise<Monthl
     if (NON_EXISTENT_BOOK_IDS.has(bookId)) {
         throw new ApiError(NOT_FOUND_MESSAGE, 500);
     }
-    const base = 2 + (hashCode(`loan-base-${bookId}`) % 8);
+    const base = 2 + (hashCode(`loan-base-${bookId}`) % 8); // 2~9건 기준선
     const data = MONTHLY_TREND_MONTH_LABELS.map((month, i) => {
         const seed = hashCode(`loan-${bookId}-${i}`);
-        const jitter = (seed % 5) - 2;
+        const jitter = (seed % 5) - 2; // -2 ~ +2
         return { month, v: Math.max(0, base + jitter) };
     });
     return mockDelay(data);

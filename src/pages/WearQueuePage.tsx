@@ -20,7 +20,6 @@ import {
   classifyIdleBooksApi,
 } from "../api/checklists";
 import { ApiError } from "../api/client";
-import type { PageId } from "../types";
 
 const PAGE_SIZE = 10;
 
@@ -42,7 +41,7 @@ const buildQueueCacheKey = (
 ) => `${targetPage}|${keyword}|${genre}|${sortOrder ?? ""}`;
 
 export function WearQueuePage({
-  books, setBooks, inspections, setInspections, inspectorName, librarianCode, setActivePage,
+  books, setBooks, inspections, setInspections, inspectorName, librarianCode,
 }: {
   books: Book[];
   setBooks: React.Dispatch<React.SetStateAction<Book[]>>;
@@ -50,9 +49,6 @@ export function WearQueuePage({
   setInspections: React.Dispatch<React.SetStateAction<Record<string, DamageInspection>>>;
   inspectorName?: string;
   librarianCode: string; // 로그인 세션의 사서 코드 — 점검 리스트 등록 요청(librarianCode)에 사용
-  // 등록 성공 시 WearManagePage("wear-manage")로 이동시키기 위함.
-  // 아래 페이지네이션용 로컬 상태(page/setPage)와 이름이 겹치지 않도록 setActivePage로 명명.
-  setActivePage: React.Dispatch<React.SetStateAction<PageId>>;
 }) {
   const [checklistTarget, setChecklistTarget] = useState<Book | null>(null);
   const [search, setSearch] = useState("");
@@ -221,11 +217,9 @@ export function WearQueuePage({
       // 이 화면으로 다시 돌아왔을 때 등록된 도서가 캐시 때문에 다시 보이지 않도록 비워준다.
       queueListCache.clear();
 
-      // 점검 등록이 끝난 도서는 이 화면(DAMAGE_PENDING 목록) 대상이 아니므로 더 이상 여기 머무를 필요가 없다.
-      // WearManagePage로 이동시킨다 — 그쪽에서 마운트 시 GET /checklists/results/completed로 최신 목록을 다시 받아온다.
-      // (여기서 fetchQueueBooks로 재조회하면 등록 직후 화면에는 남아있는 채로 재클릭이 가능해져
-      //  "이미 등록된 점검 결과입니다" 에러로 이어지는 원인이 되므로 재조회 대신 즉시 페이지 전환한다.)
-      setActivePage("wear-manage");
+      // 점검 등록이 끝난 도서는 이 화면(DAMAGE_PENDING 목록) 대상이 아니므로 목록에서 바로 제거한다.
+      // (자동으로 WearManagePage로 이동시키던 기존 동작은 제거 — 사용자가 이 화면에 계속 머무르길 원함)
+      setBooks((prev) => prev.filter((b) => b.id !== targetId));
     } catch (e) {
       if (e instanceof ApiError) {
         setSaveError({ message: e.message, errorType: e.error, statusCode: e.statusCode });

@@ -170,6 +170,8 @@ export type ConfirmDecisionsResponse = ConfirmDecisionData[];
 
 // 9. 도서 월별 대출 추이 조회
 // GET /api/checklists/books/{bookId}/loans/monthly
+// - 오래된 달 → 최근 달 순으로 이미 정렬되어 내려옴 (클라이언트에서 재정렬 불필요)
+// - 배열 길이가 항상 12개는 아님 (스냅샷 데이터가 부족하면 더 적게, 0개일 수도 있음)
 export interface MonthlyLoanTrendItem {
   month: string; // "YY.MM" 형식, 예: "25.07" = 2025년 7월
   v: number; // 해당 월 실제 대출 건수 (0 이상)

@@ -12,6 +12,7 @@ import {
     CompletedChecklistListResponse,
     ConfirmDecisionData,
     ConfirmDecisionRequest,
+    ConfirmDecisionResponse,
     ConfirmDecisionsRequest,
     ConfirmDecisionsResponse,
     CreateCheckItemRequest,
@@ -141,15 +142,17 @@ export function bookStatusToDecision(status: Exclude<BookStatus, "대기">): Dec
 }
 
 // 폐기/이관/보존 결정 확정 — PUT /api/checklists/results/{resultBatchId}/decision
+// 실제 응답은 { status, message, data: {...} } 형태로 감싸져 온다 (2026-08-06 실응답 확인 — 이전 문서/코멘트가 오기였음).
 export const confirmDecisionApi = async (
     resultBatchId: number,
     body: ConfirmDecisionRequest
 ): Promise<ConfirmDecisionData> => {
     if (USE_MOCK) return confirmDecisionApiMock(resultBatchId, body);
-    return apiPut<ConfirmDecisionData>(
+    const envelope = await apiPut<ConfirmDecisionResponse>(
         `/api/checklists/results/${resultBatchId}/decision`,
         body
     );
+    return envelope.data;
 };
 
 // 폐기/이관/보존 결정 확정 (일괄) — PUT /api/checklists/results/decisions
