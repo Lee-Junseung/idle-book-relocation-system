@@ -109,12 +109,15 @@ export const executeTransferApiMock = (recommendationId: number): Promise<void> 
     // 같은 도서의 다른 대안 후보들은 이미 매칭이 종료된 것으로 간주해 목록에서 제외되도록 (실제 백엔드에서도 PENDING/IN_TRANSIT 필터 목록에서 사라지는 것과 동일한 효과를 내기 위해) COMPLETED로 표기.
     target.alternatives = target.alternatives.map((a) => ({ ...a, status: "COMPLETED" }));
   } else {
-    // 대안 후보(alternatives) 중 하나를 실행한 경우 — 해당 후보가 속한 상위 추천을 찾아 처리
+    // 대안 후보(alternatives) 중 하나를 실행한 경우 — 해당 후보가 속한 상위 추천을 찾아 처리.
+    // 실행된 후보만 IN_TRANSIT로 바뀌는 게 아니라, 메인 추천을 실행했을 때와 대칭이 되도록 같은 세트(메인 추천 + 나머지 대안 후보) 전체를 COMPLETED로 맞춘다.
     for (const rec of MOCK_RECORDS) {
       const alt = rec.alternatives.find((a) => a.recommendationId === recommendationId);
       if (alt) {
-        alt.status = "IN_TRANSIT";
         rec.status = "COMPLETED";
+        rec.alternatives = rec.alternatives.map((a) =>
+          a.recommendationId === recommendationId ? { ...a, status: "IN_TRANSIT" } : { ...a, status: "COMPLETED" }
+        );
         break;
       }
     }

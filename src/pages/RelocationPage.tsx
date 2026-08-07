@@ -6,7 +6,7 @@ import {
   ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight,
 } from "lucide-react";
 
-import { Card, SectionHeader, ScoreStackBar, ConfirmModal, withAlpha } from "../components";
+import { Card, SectionHeader, ScoreStackBar, TransferExecuteModal, withAlpha } from "../components";
 import { NAV, BLUE, GREEN, RED } from "../constants/colors";
 // import { AMBER } from "../constants/colors";
 import { getTransferListApi, executeTransferApi } from "../api/transfers";
@@ -16,10 +16,11 @@ import {
   RelocationCandidate,
   RelocationItem,
   TransferErrorState,
+  TransferExecuteModalConfig,
+  TransferExecuteTarget,
   TransferScoreDetails,
   mapToRelocationItem,
 } from "../types/transfers";
-import { ModalConfig } from "../types";
 
 import { CURRENT_LIBRARY } from "../constants/library";
 
@@ -93,6 +94,49 @@ function RelocationRowCells({ row, onExecute }: { row: RowLike; onExecute: (row:
   );
 }
 
+// 상세 파트(메인 추천) 1건 + 대안 후보(alternatives) 여러 건이 같은 도서를 두고 경쟁하는 한 세트다.
+// 이 중 하나라도 이관을 실행하면 나머지 후보는 더 이상 유효하지 않으므로, 새로고침 없이도
+// 즉시 "완료" 상태로 표시하고 실행 버튼이 사라지도록 로컬 상태를 낙관적으로 먼저 갱신한다.
+function applyExecutionResult(list: RelocationItem[], executedIds: Set<number>): RelocationItem[] {
+  return list.map((item) => {
+    const mainExecuted = executedIds.has(item.recommendationId);
+    const altExecuted = item.alternatives.some((a) => executedIds.has(a.recommendationId));
+    if (!mainExecuted && !altExecuted) return item;
+
+    return {
+      ...item,
+      status: mainExecuted ? "IN_TRANSIT" : "COMPLETED",
+      alternatives: item.alternatives.map((a) =>
+        executedIds.has(a.recommendationId) ? { ...a, status: "IN_TRANSIT" } : { ...a, status: "COMPLETED" }
+      ),
+    };
+  });
+}
+
+// 방금 실행한 세트는 메인 추천 status가 COMPLETED로 바뀌어 다음 목록 재조회(status=PENDING,IN_TRANSIT
+// 필터) 응답에서 통째로 빠질 수 있다. 재조회 결과에서 빠졌다고 화면에서 바로 사라져 버리면
+// "나머지는 완료 상태로 표시"라는 요구가 재조회 한 번에 무너지므로, 방금 실행으로 종료된 세트는
+// 낙관적으로 갱신했던 결과를 그대로 화면에 남겨둔다(다음 페이지 이동/새로고침 시에는 서버 응답을 따른다).
+function mergeAfterRefetch(
+  fresh: RelocationItem[],
+  prevPatched: RelocationItem[] | null,
+  executedIds: Set<number>
+): RelocationItem[] {
+  if (!prevPatched || executedIds.size === 0) return fresh;
+  const freshIds = new Set(fresh.map((i) => i.recommendationId));
+  const keptStale = prevPatched.filter((p) => {
+    if (freshIds.has(p.recommendationId)) return false;
+    return executedIds.has(p.recommendationId) || p.alternatives.some((a) => executedIds.has(a.recommendationId));
+  });
+  if (keptStale.length === 0) return fresh;
+  const merged = [...fresh];
+  keptStale.forEach((item) => {
+    const idx = prevPatched.findIndex((p) => p.recommendationId === item.recommendationId);
+    merged.splice(Math.min(Math.max(idx, 0), merged.length), 0, item);
+  });
+  return merged;
+}
+
 export function RelocationPage() {
   const [items, setItems] = useState<RelocationItem[] | null>(null);
   const [summary, setSummary] = useState({ totalPending: 0, totalSent: 0, totalReceived: 0 });
@@ -105,15 +149,18 @@ export function RelocationPage() {
 
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [dirFilter, setDirFilter] = useState<"전체" | "발신" | "수신">("전체");
-  const [modal, setModal] = useState<ModalConfig | null>(null);
+  const [modal, setModal] = useState<TransferExecuteModalConfig | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   // 이관 추천 목록 조회 (GET /api/transfers?status=PENDING,IN_TRANSIT&page=&size=)
-  const fetchQueue = useCallback(async (targetPage = 0) => {
+  // executedIds: 방금 이관 실행이 일어난 recommendationId 집합. 지정하면 재조회 응답에서
+  // 빠진 항목이라도(완료되어 필터에서 제외된 경우) 화면에서 곧바로 사라지지 않도록 보존한다.
+  const fetchQueue = useCallback(async (targetPage = 0, executedIds: Set<number> = new Set()) => {
     setError(null);
     try {
       const json = await getTransferListApi(ACTIVE_TRANSFER_STATUSES, targetPage, PAGE_SIZE);
-      setItems(json.content.map(mapToRelocationItem));
+      const fresh = json.content.map(mapToRelocationItem);
+      setItems((prev) => mergeAfterRefetch(fresh, prev, executedIds));
       setSummary(json.summary);
       setPageInfo({ totalPages: json.totalPages, totalElements: json.totalElements });
       setPage(json.pageable.pageNumber);
@@ -141,6 +188,12 @@ export function RelocationPage() {
   const doExecute = async (ids: number[]) => {
     setExecuting(true);
     setExecError(null);
+
+    const executedIdSet = new Set(ids);
+    // 요청이 끝나기를 기다리지 않고, 같은 세트(상세 파트 포함 메인 추천 + 대안 후보)의 나머지
+    // 항목을 먼저 "완료" 상태·버튼 숨김으로 낙관적 반영한다 (클릭 즉시 반응하는 느낌을 주기 위함).
+    setItems((prev) => (prev ? applyExecutionResult(prev, executedIdSet) : prev));
+
     const results = await Promise.allSettled(ids.map((id) => executeTransferApi(id)));
     setSelected(new Set());
 
@@ -157,33 +210,41 @@ export function RelocationPage() {
     }
 
     // 성공/실패 여부와 무관하게 서버의 최신 상태를 다시 불러온다 (Top5 매칭 종료 판정 등은 서버 응답 기준).
-    await fetchQueue(page);
+    // 방금 실행한 세트는 재조회 응답에서 빠지더라도 화면에서 사라지지 않도록 executedIdSet을 함께 전달한다.
+    await fetchQueue(page, executedIdSet);
     setExecuting(false);
   };
 
   const requestExecuteRow = (row: RowLike, title: string) => {
     setModal({
-      title: "이관 실행 확인",
-      body: `"${title}" 을(를) ${row.from}에서 ${row.to}(으)로 이관하시겠습니까?`,
-      detail: `이동 거리 ${row.distance} km · 매칭 스코어 ${row.score}점. 이관 실행 후 물리적 운반 일정을 별도로 조율해야 합니다.`,
-      confirmLabel: "이관 실행",
-      confirmColor: NAV,
-      icon: "warning",
+      targets: [{
+        recommendationId: row.recommendationId,
+        title,
+        from: row.from,
+        to: row.to,
+        distance: row.distance,
+        score: row.score,
+        scoreDetails: row.scoreDetails,
+      }],
       onConfirm: () => { void doExecute([row.recommendationId]); },
     });
   };
 
   const requestExecuteSelected = () => {
     const ids = Array.from(selected);
-    setModal({
-      title: "선택 이관 실행 확인",
-      body: `선택한 도서 ${ids.length}건을 일괄 이관 처리하시겠습니까?`,
-      detail: "이관 처리 후 각 분관 담당자에게 운반 일정 안내가 필요합니다. 실행 전 물리적 이동 가능 여부를 반드시 확인하십시오.",
-      confirmLabel: `${ids.length}건 이관 실행`,
-      confirmColor: NAV,
-      icon: "warning",
-      onConfirm: () => { void doExecute(ids); },
-    });
+    const targets: TransferExecuteTarget[] = ids
+      .map((id) => items?.find((it) => it.recommendationId === id))
+      .filter((it): it is RelocationItem => !!it)
+      .map((it) => ({
+        recommendationId: it.recommendationId,
+        title: it.title,
+        from: it.from,
+        to: it.to,
+        distance: it.distance,
+        score: it.score,
+        scoreDetails: it.scoreDetails,
+      }));
+    setModal({ targets, onConfirm: () => { void doExecute(ids); } });
   };
 
   const toggleSel = (id: number) => {
@@ -208,7 +269,7 @@ export function RelocationPage() {
 
   return (
     <>
-      {modal && <ConfirmModal config={modal} onClose={() => setModal(null)} />}
+      {modal && <TransferExecuteModal config={modal} onClose={() => setModal(null)} />}
 
       <div className="flex flex-col gap-4">
         <SectionHeader

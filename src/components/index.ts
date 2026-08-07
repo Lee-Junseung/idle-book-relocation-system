@@ -9,6 +9,7 @@ export * from "./ScoreStackBar";
 export * from "./DemandTag";
 export * from "./ChartTooltip";
 export * from "./ConfirmModal";
+export * from "./TransferExecuteModal";
 export * from "./InspectionChecklistModal";
 export * from "./ChecklistEditModal";
 export * from "./lib";

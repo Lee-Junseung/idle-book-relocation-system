@@ -3,6 +3,7 @@ import { DOT_COLORS, DOT_LABELS } from "../constants/colors";
 import { clampToScore } from "../constants/checklistItems";
 import { hashCode } from "../api/client";
 import { Book, LoanHistoryPoint } from "../types";
+import { TransferScoreDetails } from "../types/transfers";
 
 // DOT_COLORS[0] === "" (미평가/값 없음 상태)이거나 배열 범위를 벗어난 인덱스일 때 쓰는 중립색
 const NEUTRAL_COLOR = "#9CA3AF";
@@ -38,6 +39,30 @@ export function getDotColor(level: number): string {
 // 범위를 벗어나면 빈 문자열로 폴백함.
 export function getDotLabel(level: number): string {
   return DOT_LABELS[Math.round(level)] ?? "";
+}
+
+// 매칭 스코어 가중치 (거리 감쇄 30% + 도서 수요도 25% + 수급 불일치 해소 25% + 공간 효율성 20%).
+// RelocationPage 하단의 "매칭 스코어 산출식" 문구와 동일한 값을 단일 출처로 유지한다.
+export const TRANSFER_SCORE_WEIGHTS = {
+  distanceDecay: 0.3,
+  bookDemand: 0.25,
+  shortageResolution: 0.25,
+  spaceEfficiency: 0.2,
+} as const;
+
+// 대안 후보(alternatives)는 API가 항목별 스코어 상세(scoreDetails)를 내려주지 않아,
+// 지금까지는 매칭 스코어 표(막대그래프 + 구성 요소 툴팁) 자체가 렌더링되지 않고 숫자만 보였다.
+// 상세(펼침) 화면에서도 표가 항상 보이도록, 고정 가중치 비율로 최종 점수를 항목별로
+// 나눈 "추정치"를 만들어 폴백으로 사용한다. 서버가 내려주는 정확한 산출 근거가 아니므로,
+// 사용하는 쪽(ScoreStackBar)에서 반드시 추정치임을 표시해야 한다.
+export function estimateTransferScoreDetails(score: number): TransferScoreDetails {
+  const round1 = (n: number) => Math.round(n * 10) / 10;
+  return {
+    distanceDecay: round1(score * TRANSFER_SCORE_WEIGHTS.distanceDecay),
+    bookDemand: round1(score * TRANSFER_SCORE_WEIGHTS.bookDemand),
+    shortageResolution: round1(score * TRANSFER_SCORE_WEIGHTS.shortageResolution),
+    spaceEfficiency: round1(score * TRANSFER_SCORE_WEIGHTS.spaceEfficiency),
+  };
 }
 
 // 마모 점검/이관 판단에 쓰는 기준일 계산 및 월별 대출량 추정 데이터 생성 유틸
