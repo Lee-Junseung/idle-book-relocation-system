@@ -1,7 +1,6 @@
 // 유휴화 점수를 막대그래프로 표시하고, 클릭/탭 또는 마우스오버 시 점수 산정 근거를 툴팁으로 보여주는 컴포넌트
 // 점수 산출 공식(KDC 대분류별 가변 가중치): U_i = Wage(KDC) × Sage(i) + Wloan(KDC) × Sloan(i)
-// Sdecay(대출 감소도)는 U-Score 합산에 포함되지 않고, U-Score 산출 후 "과거 베스트셀러 → 현재 유휴 전환" 패턴을
-// 감지하는 보조 필터(Sdecay ≥ 90)로만 사용됨.
+// Sdecay(대출 감소도)는 U-Score 합산에 포함되지 않고, U-Score 산출 후 "과거 베스트셀러 → 현재 유휴 전환" 패턴을 감지하는 보조 필터(Sdecay ≥ 90)로만 사용됨.
 import { useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Book } from "../types";
@@ -139,12 +138,9 @@ export function IdleScoreBar({ book }: { book: Book }) {
         };
     }, [tooltipPos]);
 
-    // 툴팁이 열려 있는 동안 스크롤이 일어나면(페이지 전체든, 테이블처럼 내부 스크롤 컨테이너든)
-    // 트리거 요소의 화면상 좌표가 바뀌므로 매번 다시 계산해서 툴팁이 항상 트리거를 따라가게 한다.
-    // 스크롤 이벤트는 버블링되지 않으므로 document에 캡처 단계로 리스너를 걸어야
-    // 내부 스크롤 컨테이너(예: overflow-x-auto 테이블 래퍼)의 스크롤도 감지할 수 있다.
-    // 의존성 배열을 tooltipPos 전체가 아닌 isTooltipOpen(boolean)으로 둬서, 스크롤 중
-    // computePosition이 tooltipPos를 갱신할 때마다 리스너가 매번 해제/재등록되는 것을 방지한다.
+    // 툴팁이 열려 있는 동안 스크롤이 일어나면(페이지 전체든, 테이블처럼 내부 스크롤 컨테이너든) 트리거 요소의 화면상 좌표가 바뀌므로 매번 다시 계산해서 툴팁이 항상 트리거를 따라가게 한다.
+    // 스크롤 이벤트는 버블링되지 않으므로 document에 캡처 단계로 리스너를 걸어야 내부 스크롤 컨테이너(예: overflow-x-auto 테이블 래퍼)의 스크롤도 감지할 수 있다.
+    // 의존성 배열을 tooltipPos 전체가 아닌 isTooltipOpen(boolean)으로 둬서, 스크롤 중 computePosition이 tooltipPos를 갱신할 때마다 리스너가 매번 해제/재등록되는 것을 방지한다.
     useEffect(() => {
         if (!isTooltipOpen) return;
         const handleScroll = () => computePosition();

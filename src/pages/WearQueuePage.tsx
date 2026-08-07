@@ -10,7 +10,7 @@ import { NAV } from "../constants/colors";
 import { KDC_GENRES } from "../constants/genres";
 import { IdleScoreBar } from "../components/IdleScoreBar";
 import { Book, DamageInspection } from "../types";
-import type { ChecklistErrorState, ChecklistListResponse, ChecklistSortOrder } from "../types/checklists";
+import type { ChecklistErrorState, ChecklistSortOrder } from "../types/checklists";
 import { averageScore, clampToScore } from "../constants/checklistItems";
 import {
   getChecklistListApi,
@@ -23,22 +23,22 @@ import { ApiError } from "../api/client";
 
 const PAGE_SIZE = 10;
 
-// 검색(타이핑)에만 적용하는 디바운스. 장르/정렬은 클릭 한 번으로 값이 바로 확정되는 액션이라
-// 굳이 기다릴 필요가 없어서 별도로 분리하고 즉시 조회한다 (예전엔 셋 다 400ms를 기다렸음).
+// 검색(타이핑)에만 적용하는 디바운스.
+// 장르/정렬은 클릭 한 번으로 값이 바로 확정되는 액션이라 굳이 기다릴 필요가 없어서 별도로 분리하고 즉시 조회한다.
 const SEARCH_DEBOUNCE_MS = 300;
 
-// 조회 결과 캐시. 컴포넌트 바깥(모듈 스코프)에 둬서 WearManagePage 등 다른 화면에 갔다가
-// 다시 돌아와도 유지된다. 페이지/검색어/장르/정렬 조합을 키로 마지막 응답을 저장해두고,
-// 같은 조합을 다시 조회할 때는 네트워크 응답을 기다리지 않고 캐시를 먼저 화면에 보여준 뒤
-// (stale-while-revalidate) 최신 데이터가 도착하면 조용히 교체한다.
-// "유휴화 도서 새로고침"을 누르면 실제 데이터가 바뀌므로 전체 무효화한다.
-const queueListCache = new Map<string, ChecklistListResponse>();
-const buildQueueCacheKey = (
-  targetPage: number,
-  keyword: string,
-  genre: string,
-  sortOrder: ChecklistSortOrder | null
-) => `${targetPage}|${keyword}|${genre}|${sortOrder ?? ""}`;
+function ErrorBanner({ error, messagePrefix }: { error: ChecklistErrorState; messagePrefix?: string }) {
+  return (
+    <div className="px-4 py-3 rounded-md border border-red-200 bg-red-50 flex items-start gap-2.5 text-sm text-red-500">
+      {error.errorType && (
+        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 flex-shrink-0 whitespace-nowrap">
+          {error.statusCode ?? ""} {error.errorType}
+        </span>
+      )}
+      <span>{messagePrefix}{error.message}</span>
+    </div>
+  );
+}
 
 export function WearQueuePage({
   books, setBooks, inspections, setInspections, inspectorName, librarianCode,
@@ -53,45 +53,31 @@ export function WearQueuePage({
   const [checklistTarget, setChecklistTarget] = useState<Book | null>(null);
   const [search, setSearch] = useState("");
   const [genreFilter, setGenreFilter] = useState("전체 장르");
-  // 백엔드가 유휴화 점수(idleScore) 정렬만 지원하므로(ASC/DESC), 제목/장르 정렬은 지원하지 않는다.
   const [sortOrder, setSortOrder] = useState<ChecklistSortOrder | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [page, setPage] = useState(0);
   const [pageInfo, setPageInfo] = useState({ totalPages: 1, totalElements: 0 });
 
-  // 최초 진입 시에만 전체 화면 로딩을 보여주고, 이후 페이지 이동/필터/검색은
-  // tableLoading(테이블 위 오버레이)만으로 표시해서 화면이 완전히 비지 않게 한다.
+  // 최초 진입 시에만 전체 화면 로딩을 보여주고, 이후 페이지 이동/필터/검색은 tableLoading(테이블 위 오버레이)만으로 표시해서 화면이 완전히 비지 않게 한다.
   const [loading, setLoading] = useState(true);
   const [tableLoading, setTableLoading] = useState(false);
   const [error, setError] = useState<ChecklistErrorState | null>(null);
   const [saveError, setSaveError] = useState<ChecklistErrorState | null>(null);
 
-  // 진행 중인 조회 요청 추적용. 새 요청(페이지 이동/필터 변경 등)이 시작되면 이전 요청은 취소해서,
-  // 느린 이전 응답이 나중에 도착해 최신 화면을 덮어써버리는 경쟁 상태(예: 페이지 버튼 빠르게 연타)를 막는다.
+  // 진행 중인 조회 요청 추적용.
+  // 새 요청(페이지 이동/필터 변경 등)이 시작되면 이전 요청은 취소해서, 느린 이전 응답이 나중에 도착해 최신 화면을 덮어써버리는 경쟁 상태(예: 페이지 버튼 빠르게 연타)를 막는다.
   const abortRef = useRef<AbortController | null>(null);
 
   // 도서 리스트 조회 (GET /api/checklists?status=DAMAGE_PENDING&keyword=&genre=&sortOrder=&page=&size=)
   // 서버가 "해당 지점 + 점검 미등록(DAMAGE_PENDING)" 조건을 이미 필터링해서 내려주므로 프론트에서 branch/inspection 상태를 다시 거를 필요 없음.
-  // 검색(keyword)/장르(genre)/정렬(sortOrder)도 서버로 그대로 전달해서 전체 데이터 기준으로 처리한다 —
-  // 클라이언트에서 다시 거르면 현재 페이지(10건) 안에서만 동작하는 문제가 생기기 때문.
+  // 검색(keyword)/장르(genre)/정렬(sortOrder)도 서버로 그대로 전달해서 전체 데이터 기준으로 처리한다 — 클라이언트에서 다시 거르면 현재 페이지(10건) 안에서만 동작하는 문제가 생기기 때문.
   const fetchQueueBooks = useCallback(async (targetPage = 0) => {
     setError(null);
     const keyword = search.trim();
     const genre = genreFilter === "전체 장르" ? "" : genreFilter;
-    const cacheKey = buildQueueCacheKey(targetPage, keyword, genre, sortOrder);
-    const cached = queueListCache.get(cacheKey);
 
-    // 캐시가 있으면 네트워크 응답을 기다리지 않고 먼저 화면에 반영한다 (stale-while-revalidate).
-    // 아래에서 실제 최신 응답이 오면 다시 한 번 덮어써서 항상 최신 상태로 맞춘다.
-    if (cached) {
-      setBooks(cached.data.map(mapToBook));
-      setPageInfo({ totalPages: cached.pageInfo.totalPages, totalElements: cached.pageInfo.totalElements });
-      setPage(cached.pageInfo.currentPage);
-      setLoading(false);
-    } else {
-      setTableLoading(true);
-    }
+    setTableLoading(true);
 
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -104,7 +90,6 @@ export function WearQueuePage({
         sortOrder: sortOrder ?? undefined,
       }, controller.signal);
 
-      queueListCache.set(cacheKey, json);
       setBooks(json.data.map(mapToBook));
       setPageInfo({ totalPages: json.pageInfo.totalPages, totalElements: json.pageInfo.totalElements });
       setPage(json.pageInfo.currentPage);
@@ -150,7 +135,6 @@ export function WearQueuePage({
     setError(null);
     try {
       await classifyIdleBooksApi();
-      queueListCache.clear(); // 재산정으로 실제 데이터가 바뀌므로 이전에 캐시해둔 응답은 더 이상 유효하지 않음
       await fetchQueueBooks(0);
     } catch (e) {
       if (e instanceof ApiError) {
@@ -213,10 +197,6 @@ export function WearQueuePage({
       setBooks((prev) => prev.map((b) => b.id === targetId ? { ...b, damage: avgRounded } : b));
       setChecklistTarget(null);
 
-      // 방금 등록한 도서가 이제 DAMAGE_PENDING 목록에서 빠지므로, 캐시해둔 이전 목록 응답은 더 이상 정확하지 않다.
-      // 이 화면으로 다시 돌아왔을 때 등록된 도서가 캐시 때문에 다시 보이지 않도록 비워준다.
-      queueListCache.clear();
-
       // 점검 등록이 끝난 도서는 이 화면(DAMAGE_PENDING 목록) 대상이 아니므로 목록에서 바로 제거한다.
       // (자동으로 WearManagePage로 이동시키던 기존 동작은 제거 — 사용자가 이 화면에 계속 머무르길 원함)
       setBooks((prev) => prev.filter((b) => b.id !== targetId));
@@ -256,57 +236,39 @@ export function WearQueuePage({
             className="flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium text-white disabled:opacity-60 whitespace-nowrap"
             style={{ backgroundColor: NAV }}>
             <RefreshCw className={`w-3.5 h-3.5 flex-shrink-0 ${refreshing ? "animate-spin" : ""}`} />
-            {refreshing ? "새로고침 중…" : "유휴화 도서 새로고침"}
+            <span className="hidden sm:inline">{refreshing ? "새로고침 중…" : "유휴화 도서 새로고침"}</span>
+            <span className="sm:hidden">{refreshing ? "처리 중…" : "새로고침"}</span>
           </button>
         </SectionHeader>
 
-        {error && (
-          <div className="px-4 py-3 rounded-md border border-red-200 bg-red-50 flex items-start gap-2.5 text-sm text-red-500">
-            {error.errorType && (
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 flex-shrink-0 whitespace-nowrap">
-                {error.statusCode ?? ""} {error.errorType}
-              </span>
-            )}
-            <span>{error.message}</span>
-          </div>
-        )}
+        {error && <ErrorBanner error={error} />}
+        {saveError && <ErrorBanner error={saveError} messagePrefix="점검 리스트 등록 실패: " />}
 
-        {saveError && (
-          <div className="px-4 py-3 rounded-md border border-red-200 bg-red-50 flex items-start gap-2.5 text-sm text-red-500">
-            {saveError.errorType && (
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-500/10 text-red-500 flex-shrink-0 whitespace-nowrap">
-                {saveError.statusCode ?? ""} {saveError.errorType}
-              </span>
-            )}
-            <span>점검 리스트 등록 실패: {saveError.message}</span>
-          </div>
-        )}
-
-        <Card className="p-4 flex flex-wrap items-end gap-3">
-          <div className="flex items-center gap-1.5 text-sm text-muted-foreground self-center">
+        <Card className="p-4 flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3">
+          <div className="flex items-center gap-1.5 text-sm text-muted-foreground sm:self-center">
             <ListFilter className="w-4 h-4" /> 필터
           </div>
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 w-full sm:w-auto">
             <label className="text-sm text-muted-foreground font-medium">검색</label>
             <div className="relative">
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input type="text" placeholder="제목 / ISBN…" value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-48 pl-8 pr-3 py-2 text-sm rounded-md border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40" />
+                className="w-full sm:w-48 pl-8 pr-3 py-2 text-sm rounded-md border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40" />
             </div>
           </div>
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 w-full sm:w-auto">
             <label className="text-sm text-muted-foreground font-medium">장르</label>
             <div className="relative">
               <Tag className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
               <select value={genreFilter} onChange={(e) => setGenreFilter(e.target.value)}
-                className="appearance-none pl-8 pr-8 py-2 text-sm rounded-md border border-border bg-background shadow-sm hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/40 transition-colors cursor-pointer">
+                className="w-full sm:w-auto appearance-none pl-8 pr-8 py-2 text-sm rounded-md border border-border bg-background shadow-sm hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/40 transition-colors cursor-pointer">
                 {genres.map((g) => <option key={g}>{g}</option>)}
               </select>
               <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             </div>
           </div>
-          <span className="ml-auto text-sm text-muted-foreground self-center whitespace-nowrap">{queueBooks.length} / {pageInfo.totalElements}건</span>
+          <span className="sm:ml-auto text-sm text-muted-foreground sm:self-center whitespace-nowrap">{queueBooks.length} / {pageInfo.totalElements}건</span>
         </Card>
 
         <Card className="overflow-hidden relative">
@@ -319,35 +281,35 @@ export function WearQueuePage({
             <table className="w-full">
               <thead className="bg-muted/40">
                 <tr className="border-b border-border">
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">
+                  <th className="px-3 sm:px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">
                     제목 / 저자
                   </th>
-                  <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">
+                  <th className="hidden md:table-cell px-3 sm:px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">
                     장르
                   </th>
                   <th onClick={toggleIdleScoreSort}
-                    className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap cursor-pointer select-none">
+                    className="px-3 sm:px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap cursor-pointer select-none">
                     <span className="flex items-center gap-1">유휴화 점수<IdleScoreSortIcon /></span>
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">점검 리스트</th>
+                  <th className="px-3 sm:px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">점검 리스트</th>
                 </tr>
               </thead>
               <tbody>
                 {queueBooks.map((book) => (
                   <tr key={book.id} className="border-b border-border hover:bg-muted/25 transition-colors">
-                    <td className="px-4 py-3 max-w-[260px]">
+                    <td className="px-3 sm:px-4 py-3 max-w-[160px] sm:max-w-[260px]">
                       <p className="text-sm font-medium text-foreground truncate">{book.title}</p>
                       <p className="text-sm text-muted-foreground truncate">{book.author}</p>
                     </td>
-                    <td className="hidden md:table-cell px-4 py-3 text-sm text-muted-foreground max-w-[110px] truncate">{book.genre}</td>
-                    <td className="px-4 py-3">
+                    <td className="hidden md:table-cell px-3 sm:px-4 py-3 text-sm text-muted-foreground max-w-[110px] truncate">{book.genre}</td>
+                    <td className="px-3 sm:px-4 py-3">
                       <IdleScoreBar book={book} />
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-3 sm:px-4 py-3 text-right">
                       <button onClick={() => { setSaveError(null); setChecklistTarget(book); }} disabled={saving}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-white text-xs font-medium hover:opacity-85 active:scale-95 transition-transform whitespace-nowrap disabled:opacity-50"
-                        style={{ backgroundColor: NAV }}>
-                        <ClipboardList className="w-3.5 h-3.5 flex-shrink-0" /> 점검 등록
+                        className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-md text-white text-xs font-medium hover:opacity-85 active:scale-95 transition-transform whitespace-nowrap disabled:opacity-50"
+                        style={{ backgroundColor: NAV }} aria-label="점검 등록">
+                        <ClipboardList className="w-3.5 h-3.5 flex-shrink-0" /> <span className="hidden sm:inline">점검 등록</span>
                       </button>
                     </td>
                   </tr>
@@ -363,12 +325,13 @@ export function WearQueuePage({
               </tbody>
             </table>
           </div>
-          <div className="px-4 py-3 border-border bg-muted/20 flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+          <div className="px-3 sm:px-4 py-3 border-border bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            {/* 산출식 설명은 보조 정보라 좁은 화면에서는 숨기고 필요하면 IdleScoreBar 툴팁으로 확인 */}
+            <div className="hidden sm:flex items-center gap-2 text-[11px] text-muted-foreground min-w-0">
               <span className="font-semibold uppercase tracking-wide whitespace-nowrap">
                 유휴화 점수 산출식:
               </span>
-              <span>
+              <span className="truncate">
                 U-Score = (KDC별 정보 노후도 가중치 × 정보 노후도) + (KDC별 대출 저조도 가중치 × 대출 저조도)
               </span>
             </div>
@@ -379,10 +342,10 @@ export function WearQueuePage({
               const pages = Array.from({ length: end - start + 1 }, (_, i) => start + i);
 
               const navBtnClass =
-                "w-8 h-8 flex items-center justify-center rounded border border-border text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors";
+                "w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded border border-border text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex-shrink-0";
 
               return (
-                <div className="flex gap-1">
+                <div className="flex gap-1 overflow-x-auto justify-center sm:justify-end">
                   <button onClick={() => goToPage(0)} disabled={page === 0} className={navBtnClass} aria-label="처음 페이지">
                     <ChevronsLeft className="w-3.5 h-3.5" />
                   </button>
@@ -392,7 +355,7 @@ export function WearQueuePage({
 
                   {pages.map((p) => (
                     <button key={p} onClick={() => goToPage(p)}
-                      className={`w-8 h-8 text-sm rounded border font-medium transition-colors
+                      className={`w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0 text-sm rounded border font-medium transition-colors
             ${p === page ? "border-primary bg-primary text-white" : "border-border text-muted-foreground hover:bg-muted"}`}>
                       {p + 1}
                     </button>
