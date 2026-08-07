@@ -1,5 +1,5 @@
 // 도서관 전체 현황(핵심 지표, 월별 대출 추이, 연령대 분포, 분관 네트워크)을 보여주는 대시보드 화면
-import { useRef, useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import {
   Bar, ComposedChart, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Line,
@@ -34,6 +34,23 @@ interface Branch {
   collection: number;
   distance: number;
   hub: boolean;
+}
+
+// 카드/차트 요소의 실시간 너비를 추적하는 훅.
+// 콜백 ref 방식이라 마운트 시점에 바로 관측을 시작하며, (기존처럼 loading 상태에 의존해 재실행할 필요가 없음)
+function useElementWidth<T extends HTMLElement>() {
+  const [width, setWidth] = useState(0);
+  const [node, setNode] = useState<T | null>(null);
+  const ref = useCallback((el: T | null) => setNode(el), []);
+
+  useEffect(() => {
+    if (!node) return;
+    const ro = new ResizeObserver((entries) => setWidth(entries[0].contentRect.width));
+    ro.observe(node);
+    return () => ro.disconnect();
+  }, [node]);
+
+  return [ref, width] as const;
 }
 
 const AGE_LABELS = {
@@ -169,31 +186,8 @@ export function OverviewPage() {
     return () => { cancelled = true; };
   }, []);
 
-  const chartWrapRef = useRef(null);
-  const [chartWidth, setChartWidth] = useState(0);
-
-  useEffect(() => {
-    const el = chartWrapRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(entries => {
-      setChartWidth(entries[0].contentRect.width);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [loading]);
-
-  const demoCardRef = useRef(null);
-  const [demoCardWidth, setDemoCardWidth] = useState(0);
-
-  useEffect(() => {
-    const el = demoCardRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(entries => {
-      setDemoCardWidth(entries[0].contentRect.width);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [loading]);
+  const [chartWrapRef, chartWidth] = useElementWidth<HTMLDivElement>();
+  const [demoCardRef, demoCardWidth] = useElementWidth<HTMLDivElement>();
 
   if (loading) {
     return <div className="p-4 sm:p-6 text-sm text-muted-foreground">데이터를 불러오는 중입니다...</div>;
@@ -293,7 +287,8 @@ export function OverviewPage() {
                   if (!active || !payload?.length) return null;
                   const row = loanTrendData.find(d => d.month === label);
                   return (
-                    <div className="bg-card border border-border rounded shadow-lg px-3 py-2.5 text-xs w-[170px] sm:min-w-[190px] sm:w-auto">
+                    <div className="bg-card border border-border rounded shadow-lg px-3 py-2.5 text-xs w-[170px] sm:min-w-[190px] sm:w-auto"
+                      style={{ maxWidth: chartWidth ? chartWidth - 16 : undefined }}>
                       <p className="font-semibold text-foreground mb-2 pb-1.5 border-b border-border">{label}</p>
                       {[
                         { label: "소장 도서 수", value: row ? row.collection.toLocaleString() + "권" : "", color: NAV },
@@ -418,7 +413,7 @@ export function OverviewPage() {
             ))}
           </div>
           <p className="text-[10px] text-muted-foreground mt-2 pt-2 border-t border-border">
-            총 {branches.length -1}개 분관
+            총 {branches.length - 1}개 분관
           </p>
         </Card>
       </div>

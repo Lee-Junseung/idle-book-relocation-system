@@ -50,11 +50,8 @@ export const TRANSFER_SCORE_WEIGHTS = {
   spaceEfficiency: 0.2,
 } as const;
 
-// 대안 후보(alternatives)는 API가 항목별 스코어 상세(scoreDetails)를 내려주지 않아,
-// 지금까지는 매칭 스코어 표(막대그래프 + 구성 요소 툴팁) 자체가 렌더링되지 않고 숫자만 보였다.
-// 상세(펼침) 화면에서도 표가 항상 보이도록, 고정 가중치 비율로 최종 점수를 항목별로
-// 나눈 "추정치"를 만들어 폴백으로 사용한다. 서버가 내려주는 정확한 산출 근거가 아니므로,
-// 사용하는 쪽(ScoreStackBar)에서 반드시 추정치임을 표시해야 한다.
+// 상세(펼침) 화면에서도 표가 항상 보이도록, 고정 가중치 비율로 최종 점수를 항목별로 나눈 "추정치"를 만들어 폴백으로 사용한다.
+// 서버가 내려주는 정확한 산출 근거가 아니므로, 사용하는 쪽(ScoreStackBar)에서 반드시 추정치임을 표시해야 한다.
 export function estimateTransferScoreDetails(score: number): TransferScoreDetails {
   const round1 = (n: number) => Math.round(n * 10) / 10;
   return {

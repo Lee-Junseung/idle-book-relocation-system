@@ -12,27 +12,24 @@ import type {
 interface MonthlyLoanTrendRaw {
     month: string; // "1월" ~ "12월"
     loans: number;
-    returns: number;
-    renewals: number;
-    members: number;
     collection: number;
     turnover: number;
 }
 
-// 2026년 1월~12월 실적 (단일 연도, 회계연도 아님 — 12월 collection이 annualData의 2026년 값과 일치)
+// 2026년 1월~12월 실적
 const LOAN_TREND_DATA: MonthlyLoanTrendRaw[] = [
-    { month: "1월", loans: 8420, returns: 7810, renewals: 2340, members: 1820, collection: 139400, turnover: 0.060 },
-    { month: "2월", loans: 7860, returns: 7420, renewals: 2110, members: 1640, collection: 139760, turnover: 0.056 },
-    { month: "3월", loans: 9340, returns: 8890, renewals: 2580, members: 2140, collection: 140120, turnover: 0.067 },
-    { month: "4월", loans: 9820, returns: 9210, renewals: 2760, members: 2380, collection: 140480, turnover: 0.070 },
-    { month: "5월", loans: 10440, returns: 9870, renewals: 3020, members: 2620, collection: 140840, turnover: 0.074 },
-    { month: "6월", loans: 8970, returns: 8540, renewals: 2410, members: 2190, collection: 141200, turnover: 0.064 },
-    { month: "7월", loans: 11250, returns: 10680, renewals: 3340, members: 3010, collection: 141560, turnover: 0.079 },
-    { month: "8월", loans: 12380, returns: 11840, renewals: 3780, members: 3540, collection: 141920, turnover: 0.087 },
-    { month: "9월", loans: 9640, returns: 9180, renewals: 2640, members: 2280, collection: 142280, turnover: 0.068 },
-    { month: "10월", loans: 10180, returns: 9720, renewals: 2880, members: 2490, collection: 142520, turnover: 0.071 },
-    { month: "11월", loans: 9560, returns: 9140, renewals: 2610, members: 2210, collection: 142680, turnover: 0.067 },
-    { month: "12월", loans: 8840, returns: 8420, renewals: 2320, members: 1980, collection: 142840, turnover: 0.062 },
+    { month: "1월", loans: 8420, collection: 139400, turnover: 0.060 },
+    { month: "2월", loans: 7860, collection: 139760, turnover: 0.056 },
+    { month: "3월", loans: 9340, collection: 140120, turnover: 0.067 },
+    { month: "4월", loans: 9820, collection: 140480, turnover: 0.070 },
+    { month: "5월", loans: 10440, collection: 140840, turnover: 0.074 },
+    { month: "6월", loans: 8970, collection: 141200, turnover: 0.064 },
+    { month: "7월", loans: 11250, collection: 141560, turnover: 0.079 },
+    { month: "8월", loans: 12380, collection: 141920, turnover: 0.087 },
+    { month: "9월", loans: 9640, collection: 142280, turnover: 0.068 },
+    { month: "10월", loans: 10180, collection: 142520, turnover: 0.071 },
+    { month: "11월", loans: 9560, collection: 142680, turnover: 0.067 },
+    { month: "12월", loans: 8840, collection: 142840, turnover: 0.062 },
 ];
 
 // 실제 이 데이터가 속한 연도. LOAN_TREND_DATA는 이 연도 1~12월 데이터로 취급한다.
