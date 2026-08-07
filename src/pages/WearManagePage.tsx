@@ -7,9 +7,6 @@ import {
   Search, ClipboardEdit, Tag, Loader2, AlertTriangle,
   ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight,
 } from "lucide-react";
-// import {
-//   X,
-// } from "lucide-react";
 
 import { Card, SectionHeader, DamageDot, DamageTooltipCell, ConfirmModal, ChecklistEditModal, withAlpha, getDotColor, getDotLabel } from "../components";
 import { NAV, GREEN, RED, PURPLE, AMBER } from "../constants/colors";
@@ -104,19 +101,19 @@ export function WearManagePage({
 
   // 점검 항목 마스터 조회 (checkItemId -> maxScore 등)
   // 화면 내부 척도(1~5)를 실제 항목별 만점(maxScore)에 맞춰 변환할 때 사용합니다.
-  // 실패해도 화면 자체는 계속 쓸 수 있어야 하므로, 실패 시 조용히 폴백(만점 5로 간주)합니다.
+  // 이 도메인은 15문항 모두 5점 만점 고정이라, 조회 실패 시 쓰는 폴백(만점 5)도 항상 실제 값과 같습니다.
+  // 그래서 실패해도 화면 표시/점검 수정/저장 결과 모두 정상 동작하며 사용자에게는 아무 영향이 없습니다 — 콘솔 경고만 남깁니다.
   const [checkItemMaster, setCheckItemMaster] = useState<Record<number, CheckItemMaster>>({});
 
   useEffect(() => {
     getCheckItemsApi()
       .then((items) => setCheckItemMaster(Object.fromEntries(items.map((item) => [item.id, item]))))
       .catch((err: unknown) => {
-        console.warn(
-          "[WearManagePage] 점검 항목 마스터 조회 실패 — 항목별 만점을 5점으로 간주해 계속 진행합니다.",
-          err
-        );
+        console.warn("[WearManagePage] 점검 항목 마스터 조회 실패. 잠시 후 다시 시도해 주세요.", err);
       });
   }, []);
+
+
 
   // 상세 조회 (행 패널을 펼칠 때)
   const [bookDetail, setBookDetail] = useState<BookDetailResult | null>(null);
@@ -166,8 +163,7 @@ export function WearManagePage({
       .finally(() => setMonthlyLoanLoading(false));
   }, [panelBook]);
 
-  // API가 이미 "YY.MM" 라벨(month)과 건수(v)를 오래된 달 → 최근 달 순으로 정렬해 내려주므로
-  // 별도 변환/정렬 없이 그대로 쓴다. month가 비어 있는 항목만 방어적으로 걸러낸다.
+  // API가 이미 "YY.MM" 라벨(month)과 건수(v)를 오래된 달 → 최근 달 순으로 정렬해 내려주므로 별도 변환/정렬 없이 그대로 쓴다. month가 비어 있는 항목만 방어적으로 걸러낸다.
   const monthlyChartData = useMemo(
     () => monthlyLoanData.filter((item) => !!item.month),
     [monthlyLoanData]
@@ -233,8 +229,8 @@ export function WearManagePage({
 
     setDecisionSaving(true);
 
-    // 성공한 도서의 id -> 서버가 응답으로 내려준 decidedAt(ISO 8601). 화면 반영 시 이 값을 우선 사용하되,
-    // 서버 응답에 decidedAt이 없는 경우(필드명 불일치/누락 등) 크래시 대신 클라이언트가 보낸 decidedDate로 대체합니다.
+    // 성공한 도서의 id -> 서버가 응답으로 내려준 decidedAt(ISO 8601).
+    // 화면 반영 시 이 값을 우선 사용하되, 서버 응답에 decidedAt이 없는 경우(필드명 불일치/누락 등) 크래시 대신 클라이언트가 보낸 decidedDate로 대체합니다.
     let succeededEntries: { id: string; decidedAt: string }[] = [];
     let failedCount = skipped.length;
     let errorMessage: string | undefined;
@@ -372,11 +368,27 @@ export function WearManagePage({
     // 점검 결과 수정 (PUT)
     // INSP_ITEMS_FLAT의 각 항목이 checkItemId를 갖고 있으므로 그대로 매핑합니다.
     const resultBatchId = resultBatchByBookId[targetId];
+    // 서버에서 불러온 원래 항목별 점수(checkItemId -> 결과) — 마스터 조회 실패 시 폴백 비교용
+    const originalByItemId = new Map(
+      (bookDetail?.checkResults ?? []).map((r) => [r.checkItemId, r])
+    );
     // 통과 판정 기준: 화면 척도(1~5) 원점수 기준 2점 이하를 통과로 봅니다.
     // itemScore 필드 자체는 maxScore로 스케일 변환된 값을 그대로 보내되(백엔드가 항목별 만점 기준 점수를 원하므로), "통과 여부"는 항목별 만점이 서로 달라도 두 화면에서 같은 의미를 갖도록 원점수로 판단합니다.
     const checkResults: UpdateCheckResultInput[] = INSP_ITEMS_FLAT.map(({ key, checkItemId }) => {
       const value = insp[key] as unknown as number;
-      const maxScore = checkItemMaster[checkItemId]?.maxScore ?? 5;
+      const master = checkItemMaster[checkItemId];
+      const original = originalByItemId.get(checkItemId);
+
+      // 항목별 만점(maxScore)을 알 수 없는 경우(마스터 조회 실패) 5점 만점으로 임의 재계산하지 않습니다.
+      // 화면 값이 서버에서 불러온 원래 값과 같다면(=이 항목은 수정하지 않음) 원래 itemScore/통과여부를 그대로 유지합니다.
+      if (!master && original) {
+        const unchangedFromOriginal = value === clampToScore(original.itemScore);
+        if (unchangedFromOriginal) {
+          return { checkItemId, isPassed: original.isPassed, itemScore: original.itemScore };
+        }
+      }
+
+      const maxScore = master?.maxScore ?? 5;
       const itemScore = Math.round((value / 5) * maxScore);
       return {
         checkItemId,
@@ -389,7 +401,7 @@ export function WearManagePage({
 
     if (!resultBatchId) {
       console.warn(
-        `[WearManagePage] "${targetId}" 도서의 resultBatchId를 찾을 수 없어 서버 저장을 건너뜁니다. ` +
+        `[WearManagePage] "${targetId}" 도서의 서버 저장을 건너뜁니다: 도서의 resultBatchId = X ` +
         "(점검 완료 목록 응답에 해당 도서가 없거나 새로고침이 필요할 수 있습니다)"
       );
       setChecklistTarget(null);
@@ -462,19 +474,25 @@ export function WearManagePage({
           title="유휴 도서 처리 목록"
           sub={`점검 리스트 등록 도서 폐기·이관·보존 결정`}>
           <button onClick={() => requestBulkAction("폐기승인")} disabled={selected.size === 0}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-md text-sm font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
             style={{ backgroundColor: RED }}>
-            <Trash2 className="w-3.5 h-3.5 flex-shrink-0" /> 일괄 폐기 ({selected.size})
+            <Trash2 className="w-3.5 h-3.5 flex-shrink-0" />
+            <span className="hidden sm:inline">일괄 폐기 ({selected.size})</span>
+            <span className="sm:hidden">폐기 ({selected.size})</span>
           </button>
           <button onClick={() => requestBulkAction("이관승인")} disabled={selected.size === 0}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-md text-sm font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
             style={{ backgroundColor: PURPLE }}>
-            <MoveRight className="w-3.5 h-3.5 flex-shrink-0" /> 일괄 이관 ({selected.size})
+            <MoveRight className="w-3.5 h-3.5 flex-shrink-0" />
+            <span className="hidden sm:inline">일괄 이관 ({selected.size})</span>
+            <span className="sm:hidden">이관 ({selected.size})</span>
           </button>
           <button onClick={() => requestBulkAction("보존결정")} disabled={selected.size === 0}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-md text-sm font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
             style={{ backgroundColor: GREEN }}>
-            <Check className="w-3.5 h-3.5 flex-shrink-0" /> 일괄 보존 ({selected.size})
+            <Check className="w-3.5 h-3.5 flex-shrink-0" />
+            <span className="hidden sm:inline">일괄 보존 ({selected.size})</span>
+            <span className="sm:hidden">보존 ({selected.size})</span>
           </button>
         </SectionHeader>
 
@@ -503,31 +521,31 @@ export function WearManagePage({
           ))}
         </div>
 
-        <Card className="p-4 flex flex-wrap items-end gap-3">
-          <div className="flex items-center gap-1.5 text-sm text-muted-foreground self-center">
+        <Card className="p-4 flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3">
+          <div className="flex items-center gap-1.5 text-sm text-muted-foreground sm:self-center">
             <ListFilter className="w-4 h-4" /> 필터
           </div>
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 w-full sm:w-auto">
             <label className="text-sm text-muted-foreground font-medium">검색</label>
             <div className="relative">
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input type="text" placeholder="제목 / ISBN…" value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-44 pl-8 pr-3 py-2 text-sm rounded-md border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40" />
+                className="w-full sm:w-44 pl-8 pr-3 py-2 text-sm rounded-md border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40" />
             </div>
           </div>
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 w-full sm:w-auto">
             <label className="text-sm text-muted-foreground font-medium">장르</label>
             <div className="relative">
               <Tag className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
               <select value={genreFilter} onChange={(e) => setGenreFilter(e.target.value)}
-                className="appearance-none pl-8 pr-8 py-2 text-sm rounded-md border border-border bg-background shadow-sm hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/40 transition-colors cursor-pointer">
+                className="w-full sm:w-auto appearance-none pl-8 pr-8 py-2 text-sm rounded-md border border-border bg-background shadow-sm hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/40 transition-colors cursor-pointer">
                 {genres.map((g) => <option key={g}>{g}</option>)}
               </select>
               <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             </div>
           </div>
-          <div className="flex flex-col gap-1 min-w-[180px]">
+          <div className="flex flex-col gap-1 w-full sm:w-auto sm:min-w-[180px]">
             <label className="text-sm text-muted-foreground font-medium whitespace-nowrap">
               최소 마모 수준: <span className="font-semibold" style={{ color: getDotColor(damageMin), fontFamily: "'JetBrains Mono', monospace" }}>{damageMin}/5 {getDotLabel(damageMin)}</span>
             </label>
@@ -544,7 +562,7 @@ export function WearManagePage({
               <span className="text-xs text-muted-foreground">5</span>
             </div>
           </div>
-          <span className="ml-auto text-sm text-muted-foreground self-center">{filtered.length} / {inspectedBooks.length}건</span>
+          <span className="sm:ml-auto text-sm text-muted-foreground sm:self-center whitespace-nowrap">{filtered.length} / {inspectedBooks.length}건</span>
         </Card>
 
         <Card className="overflow-hidden">
@@ -557,7 +575,7 @@ export function WearManagePage({
               <table className="w-full">
                 <thead className="bg-muted/40">
                   <tr className="border-b border-border">
-                    <th className="w-9 px-4 py-3">
+                    <th className="w-9 px-3 sm:px-4 py-3">
                       <input type="checkbox" checked={allSel} onChange={toggleAll} className="rounded accent-primary" />
                     </th>
                     {([
@@ -566,13 +584,13 @@ export function WearManagePage({
                       { key: "damage", label: "마모 수준", hide: "", sortable: true },
                     ] as { key: keyof Book; label: string; hide: string; sortable: boolean }[]).map(({ key, label, hide, sortable }) => (
                       <th key={key} onClick={sortable ? () => toggleSort(key) : undefined}
-                        className={`px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap ${sortable ? "cursor-pointer select-none" : ""} ${hide}`}>
+                        className={`px-3 sm:px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap ${sortable ? "cursor-pointer select-none" : ""} ${hide}`}>
                         <span className="flex items-center gap-1 whitespace-nowrap">{label}{sortable && <SortIcon k={key} />}</span>
                       </th>
                     ))}
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">처리 상태</th>
-                    <th className="hidden lg:table-cell px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">분류 확정일</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">사서 결정</th>
+                    <th className="px-3 sm:px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">처리 상태</th>
+                    <th className="hidden lg:table-cell px-3 sm:px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">분류 확정일</th>
+                    <th className="px-3 sm:px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">사서 결정</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -592,16 +610,16 @@ export function WearManagePage({
                             ${!isActive && !isSel ? "hover:bg-muted/25" : ""}
                             ${done ? "opacity-70" : ""}`}
                           style={isActive ? { borderBottom: "none", borderLeft: `2px solid ${NAV}` } : {}}>
-                          <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                          <td className="px-3 sm:px-4 py-3" onClick={(e) => e.stopPropagation()}>
                             <input type="checkbox" checked={isSel} disabled={done} onChange={() => toggleSel(book.id)} className="rounded accent-primary" />
                           </td>
-                          <td className="px-4 py-3 max-w-[230px]">
+                          <td className="px-3 sm:px-4 py-3 max-w-[160px] sm:max-w-[230px]">
                             <p className="text-sm font-medium text-foreground truncate">{book.title}</p>
                             <p className="text-sm text-muted-foreground truncate">{book.author}</p>
                           </td>
-                          <td className="hidden md:table-cell px-4 py-3 text-sm text-muted-foreground max-w-[100px] truncate">{book.genre}</td>
-                          <td className="px-4 py-3"><DamageTooltipCell book={book} /></td>
-                          <td className="px-4 py-3">
+                          <td className="hidden md:table-cell px-3 sm:px-4 py-3 text-sm text-muted-foreground max-w-[100px] truncate">{book.genre}</td>
+                          <td className="px-3 sm:px-4 py-3"><DamageTooltipCell book={book} /></td>
+                          <td className="px-3 sm:px-4 py-3">
                             {book.status === "대기" ? (
                               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded border text-xs font-medium text-muted-foreground border-border bg-muted/40 whitespace-nowrap">
                                 <Clock className="w-3 h-3 flex-shrink-0" /> 미결정
@@ -620,10 +638,10 @@ export function WearManagePage({
                               </span>
                             )}
                           </td>
-                          <td className="hidden lg:table-cell px-4 py-3 text-sm text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                          <td className="hidden lg:table-cell px-3 sm:px-4 py-3 text-sm text-muted-foreground" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
                             {book.decidedDate ?? <span className="text-muted-foreground/30">—</span>}
                           </td>
-                          <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                          <td className="px-2 sm:px-3 py-3" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1">
                               <button disabled={done} onClick={() => requestAction(book, "폐기승인")}
                                 className="flex items-center gap-1 px-2 py-1.5 rounded text-white text-xs font-medium hover:opacity-80 active:scale-95 disabled:opacity-25 disabled:cursor-not-allowed whitespace-nowrap"
@@ -642,14 +660,6 @@ export function WearManagePage({
                           <tr key={`panel-${book.id}`} style={{ borderLeft: `2px solid ${NAV}` }}>
                             <td colSpan={7} className="px-0 pb-0">
                               <div className="px-4 py-4 border-b border-border" style={{ backgroundColor: withAlpha(NAV, 0.02) }}>
-                                {/* // X 버튼 */}
-                                {/* <div className="flex items-center justify-between mb-3 gap-2">
-                                  <button onClick={(e) => { e.stopPropagation(); setPanelBook(null); }}
-                                    className="p-1 rounded hover:bg-muted text-muted-foreground transition-colors flex-shrink-0">
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                </div> */}
-
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                   <div className="bg-card rounded-md border border-border p-3 flex flex-col">
                                     <p className="text-sm font-semibold text-foreground mb-2">최근 12개월 월별 대출 추이</p>
@@ -730,7 +740,8 @@ export function WearManagePage({
                                             담당 {bookDetail.librarianCode} · <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{bookDetail.checkedDate}</span>
                                           </span>
                                           <span className="text-xs font-bold flex-shrink-0 ml-1" style={{ color: NAV, fontFamily: "'JetBrains Mono', monospace" }}>
-                                            총점 {bookDetail.totalScore}/{MAX_TOTAL_SCORE}                                          </span>
+                                            총점 {bookDetail.totalScore}/{MAX_TOTAL_SCORE}
+                                          </span>
                                         </div>
                                       </div>
                                     ) : (
@@ -752,7 +763,7 @@ export function WearManagePage({
               </table>
             </div>
           )}
-          <div className="px-4 py-3 border-t border-border bg-muted/20 flex items-center justify-between">
+          <div className="px-3 sm:px-4 py-3 border-t border-border bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <span className="text-sm text-muted-foreground">
               {filtered.length}건 표시 중{(saving || decisionSaving) ? " · 저장 중…" : ""}
             </span>
@@ -763,10 +774,10 @@ export function WearManagePage({
               const pages = Array.from({ length: end - start + 1 }, (_, i) => start + i);
 
               const navBtnClass =
-                "w-8 h-8 flex items-center justify-center rounded border border-border text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors";
+                "w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded border border-border text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex-shrink-0";
 
               return (
-                <div className="flex gap-1">
+                <div className="flex gap-1 overflow-x-auto justify-center sm:justify-end">
                   <button onClick={() => goToPage(0)} disabled={page === 0} className={navBtnClass} aria-label="처음 페이지">
                     <ChevronsLeft className="w-3.5 h-3.5" />
                   </button>
@@ -776,7 +787,7 @@ export function WearManagePage({
 
                   {pages.map((p) => (
                     <button key={p} onClick={() => goToPage(p)}
-                      className={`w-8 h-8 text-sm rounded border font-medium transition-colors
+                      className={`w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0 text-sm rounded border font-medium transition-colors
             ${p === page ? "border-primary bg-primary text-white" : "border-border text-muted-foreground hover:bg-muted"}`}>
                       {p + 1}
                     </button>

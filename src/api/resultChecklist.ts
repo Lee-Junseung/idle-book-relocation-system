@@ -43,7 +43,7 @@ export const getCompletedChecklistsApi = (): Promise<CompletedChecklistListRespo
         ? getCompletedChecklistsApiMock()
         : apiGet<CompletedChecklistListResponse>("/api/checklists/results/completed");
 
-// totalScore(감점 총점 추정, 0~100 가정)를 화면의 1~5 마모 단계로 환산합니다.
+// totalScore를 화면의 1~5 마모 단계로 환산합니다.
 // 문항별 만점(maxScore) 합계 — 15개 항목 × 1~5점 = 75점 만점.
 export const MAX_TOTAL_SCORE = 75;
 
@@ -65,7 +65,6 @@ export function apiStatusToBookStatus(status: ApiBookStatus): BookStatus {
 
 // 목록 API가 branch 필드는 내려주지 않아 페이지 지점명으로 임시 고정합니다.
 // genre / isbn / turnoverRate는 API가 내려주므로(nullable 값 포함) 그대로 매핑합니다.
-// @param currentBranchName 이 페이지가 속한 지점명 (API에 지점 정보가 없어 고정값으로 채움)
 export function mapCompletedItemToBook(
     item: CompletedChecklistItem,
     currentBranchName: string
@@ -142,7 +141,7 @@ export function bookStatusToDecision(status: Exclude<BookStatus, "대기">): Dec
 }
 
 // 폐기/이관/보존 결정 확정 — PUT /api/checklists/results/{resultBatchId}/decision
-// 실제 응답은 { status, message, data: {...} } 형태로 감싸져 온다 (2026-08-06 실응답 확인 — 이전 문서/코멘트가 오기였음).
+// 실제 응답은 { status, message, data: {...} } 형태로 감싸져 온다.
 export const confirmDecisionApi = async (
     resultBatchId: number,
     body: ConfirmDecisionRequest

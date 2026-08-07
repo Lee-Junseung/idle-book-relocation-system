@@ -7,7 +7,7 @@ export interface ApiEnvelope<T> {
 
 // 도서 상태 (백엔드 원본 값).
 // 화면에서 쓰는 "폐기/이관/보존 결정" 상태(BookStatus)와는 별개의 개념입니다.
-// NORMAL: 정상 / IDLE: 유휴(장기 미대출 등) / IN_PROGRESS: 점검 진행중 / DISCARDED: 폐기 완료
+// NORMAL: 정상 / IDLE: 유휴(장기 미대출 등) / IN_PROGRESS: 점검 진행중 / DISCARDED: 폐기 완료 / TRANSFERRED: 이관 완료 / PRESERVED: 보존 완료
 export type ApiBookStatus = "NORMAL" | "IDLE" | "IN_PROGRESS" | "DISCARDED" | "TRANSFERRED" | "PRESERVED";
 
 // 점검 완료 도서 전체 목록 조회
@@ -21,8 +21,8 @@ export interface CompletedChecklistItem {
   publisher: string;
   genre: string | null;      // nullable
   isbn: string;
-  callNumber: string | null; // 실제 응답에서 null로 내려오는 경우 확인됨 (Postman 캡처 기준)
-  coverUrl: string | null;   // 실제 응답에서 null로 내려오는 경우 확인됨 (Postman 캡처 기준)
+  callNumber: string | null; // 실제 응답에서 null로 내려오는 경우 확인됨
+  coverUrl: string | null;   // 실제 응답에서 null로 내려오는 경우 확인됨
   turnoverRate: number | null; // nullable — 도서 회전율(이용 빈도)
   checkedDate: string; // "2026-08-01"
   librarianName: string;
@@ -49,8 +49,8 @@ export interface BookInfo {
   title: string;
   author: string;
   publisher: string;
-  callNumber: string | null; // 실제 응답에서 null로 내려오는 경우 확인됨 (Postman 캡처 기준)
-  coverUrl: string | null;   // 실제 응답에서 null로 내려오는 경우 확인됨 (Postman 캡처 기준)
+  callNumber: string | null; // 실제 응답에서 null로 내려오는 경우 확인됨
+  coverUrl: string | null;   // 실제 응답에서 null로 내려오는 경우 확인됨
   status: ApiBookStatus;
 }
 
@@ -97,7 +97,6 @@ export interface UpdateCheckResultInput {
 
 export interface UpdateChecklistResultRequest {
   // Postman 캡처(PUT /checklists/results/{id}) 기준으로 실제 요청에 포함되어 있던 필드입니다.
-  // 명세서 원문에 필수/선택 여부가 명시되어 있지 않아, 우선 캡처에서 확인된 값을 그대로 채워 보냅니다.
   bookId: number;
   librarianCode: string;
   checkedDate: string; // "2026-08-02"
@@ -136,7 +135,7 @@ export interface CheckItemMaster {
 
 export type CheckItemListResponse = ApiEnvelope<CheckItemMaster[]>;
 
-// 8. 폐기/이관/보존 결정 확정
+// 폐기/이관/보존 결정 확정
 // PUT /api/checklists/results/{resultBatchId}/decision
 export type DecisionType = "DISPOSAL" | "RELOCATION" | "KEEP";
 
@@ -154,9 +153,9 @@ export interface ConfirmDecisionData {
 
 export type ConfirmDecisionResponse = ApiEnvelope<ConfirmDecisionData>;
 
-// 9-1. 폐기/이관/보존 결정 확정 (일괄) — PUT /api/checklists/results/decisions
-// 여러 resultBatchId를 한 번에 결정 확정할 때 사용. 단건 API(위 ConfirmDecisionRequest)와 달리
-// 이 엔드포인트는 ApiEnvelope 래핑 없이 배열을 그대로 반환합니다.
+// 폐기/이관/보존 결정 확정 (일괄) — PUT /api/checklists/results/decisions
+// 여러 resultBatchId를 한 번에 결정 확정할 때 사용.
+// 단건 API(위 ConfirmDecisionRequest)와 달리 이 엔드포인트는 ApiEnvelope 래핑 없이 배열을 그대로 반환합니다.
 export interface ConfirmDecisionsRequestItem {
   resultBatchId: number;
   decision: DecisionType;
@@ -168,7 +167,7 @@ export interface ConfirmDecisionsRequest {
 
 export type ConfirmDecisionsResponse = ConfirmDecisionData[];
 
-// 9. 도서 월별 대출 추이 조회
+// 도서 월별 대출 추이 조회
 // GET /api/checklists/books/{bookId}/loans/monthly
 // - 오래된 달 → 최근 달 순으로 이미 정렬되어 내려옴 (클라이언트에서 재정렬 불필요)
 // - 배열 길이가 항상 12개는 아님 (스냅샷 데이터가 부족하면 더 적게, 0개일 수도 있음)
