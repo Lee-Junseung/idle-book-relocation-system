@@ -3,7 +3,6 @@ import { useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { TransferScoreDetails } from "../types/transfers";
 import { NAV, BLUE, TEAL, AMBER, GREEN } from "../constants/colors";
-import { estimateTransferScoreDetails, withAlpha } from "./lib";
 
 const TOOLTIP_WIDTH = 224;
 const TOOLTIP_MARGIN = 8;
@@ -16,20 +15,15 @@ interface TooltipPosition {
   placement: "above" | "below";
 }
 
-export function ScoreStackBar({ score, scoreDetails }: { score: number; scoreDetails?: TransferScoreDetails }) {
+export function ScoreStackBar({ score, scoreDetails }: { score: number; scoreDetails: TransferScoreDetails }) {
   const triggerRef = useRef<HTMLDivElement>(null);
   const [tooltipPos, setTooltipPos] = useState<TooltipPosition | null>(null);
 
-  // 대안 후보(alternatives)는 API가 scoreDetails를 내려주지 않는다.
-  // 이 경우에도 매칭 스코어 표 자체는 항상 보이도록, 고정 가중치 비율로 나눈 추정치를 폴백으로 사용한다.
-  const isEstimated = !scoreDetails;
-  const details = scoreDetails ?? estimateTransferScoreDetails(score);
-
   const rows = [
-    { label: "거리 감쇄", weight: "×0.30", contrib: details.distanceDecay, color: BLUE },
-    { label: "도서 수요도", weight: "×0.25", contrib: details.bookDemand, color: TEAL },
-    { label: "수급 불일치 해소", weight: "×0.25", contrib: details.shortageResolution, color: AMBER },
-    { label: "공간 효율성", weight: "×0.20", contrib: details.spaceEfficiency, color: GREEN },
+    { label: "거리 감쇄", weight: "×0.30", contrib: scoreDetails.distanceDecay, color: BLUE },
+    { label: "도서 수요도", weight: "×0.25", contrib: scoreDetails.bookDemand, color: TEAL },
+    { label: "수급 불일치 해소", weight: "×0.25", contrib: scoreDetails.shortageResolution, color: AMBER },
+    { label: "공간 효율성", weight: "×0.20", contrib: scoreDetails.spaceEfficiency, color: GREEN },
   ];
   const total = rows.reduce((sum, r) => sum + r.contrib, 0);
 
@@ -110,17 +104,9 @@ export function ScoreStackBar({ score, scoreDetails }: { score: number; scoreDet
         >
           <div className="flex items-center gap-1.5 mb-2">
             <p className="text-[11px] font-semibold text-foreground">매칭 스코어 구성 요소</p>
-            {isEstimated && (
-              <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded"
-                style={{ backgroundColor: withAlpha(AMBER, 0.12), color: AMBER }}>
-                추정치
-              </span>
-            )}
           </div>
           <p className="text-[9px] text-muted-foreground mb-2 leading-snug">
-            {isEstimated
-              ? "※ 대안 후보는 서버가 항목별 점수를 내려주지 않아, 고정 가중치(30/25/25/20%) 비율로 최종 점수를 나눈 추정치입니다."
-              : "※ 반올림으로 인해 항목 합산치가 최종 점수와 소수점 단위로 다를 수 있습니다."}
+            ※ 반올림으로 인해 항목 합산치가 최종 점수와 소수점 단위로 다를 수 있습니다.
           </p>
           <div className="flex flex-col gap-1.5">
             {rows.map((row) => (

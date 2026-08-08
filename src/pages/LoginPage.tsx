@@ -12,8 +12,9 @@ import { ApiError } from "../api/client";
 import { saveSession } from "../api/session";
 import { Session } from "../types";
 
-const MONO = "'JetBrains Mono', monospace";
+const MONO = "var(--font-mono)";
 const SERIF = "var(--font-serif)";
+// 아이디 저장 기능: UI는 아직 미노출(아래 주석 처리된 부분)이지만, 추후 활성화 시 바로 쓸 수 있도록 로직은 남겨둠
 const REMEMBER_ID_KEY = "lib_remember_id";
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -52,7 +53,7 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
   const [loginId, setLoginId] = useState(() => {
     try { return localStorage.getItem(REMEMBER_ID_KEY) ?? ""; } catch { return ""; }
   });
-  const [rememberId] = useState(() => {
+  const [rememberId] = useState(() => { // const [rememberId, setRememberId] = useState(() => {
     try { return !!localStorage.getItem(REMEMBER_ID_KEY); } catch { return false; }
   });
   const [loginPw, setLoginPw] = useState("");
@@ -130,7 +131,7 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
 
         <div className="relative z-10 flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-sm flex items-center justify-center bg-white/10 backdrop-blur-sm border border-white/15">
-            <LibraryBig className="w-4.5 h-4.5 text-white" />
+            <LibraryBig className="w-4 h-4 text-white" />
           </div>
           <span className="text-white/90 text-sm font-semibold tracking-wide">도서 관리 시스템</span>
         </div>
@@ -241,14 +242,14 @@ export function LoginPage({ onLogin }: { onLogin: (session: Session) => void }) 
               }
             />
 
-            {/* 아이디 저장 / 아이디 · 비밀번호 찾기 버튼 */}
-            {/* <div className="flex items-center justify-between -mt-1">
+            {/* 아이디 저장 / 아이디 · 비밀번호 찾기 — 추후 활성화 예정 (지금은 UI만 비노출) */}
+            {/* <div className="flex flex-col gap-2 -mt-1 sm:flex-row sm:items-center sm:justify-between sm:gap-0">
               <label className="flex items-center gap-2 select-none cursor-pointer">
                 <input type="checkbox" checked={rememberId} onChange={(e) => setRememberId(e.target.checked)}
-                  className="w-3.5 h-3.5 rounded-sm accent-primary" />
+                  className="w-3.5 h-3.5 rounded-sm accent-primary flex-shrink-0" />
                 <span className="text-sm text-muted-foreground">아이디 저장</span>
               </label>
-              <span className="text-sm text-muted-foreground">아이디 · 비밀번호 찾기</span>
+              <span className="text-sm text-muted-foreground sm:text-right">아이디 · 비밀번호 찾기</span>
             </div> */}
 
             {/* 에러 영역: 항상 렌더링되어 있어 메시지 유무와 상관없이 높이가 고정됨 */}

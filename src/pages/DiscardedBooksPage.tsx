@@ -76,10 +76,6 @@ export function DiscardedBooksPage() {
     if (page > totalPages - 1) setPage(0);
   }, [totalPages, page]);
 
-  const goToPage = (p: number) => {
-    setPage(p);
-  };
-
   const paginated = useMemo(
     () => filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
     [filtered, page]
@@ -107,8 +103,10 @@ export function DiscardedBooksPage() {
         </Card>
       )}
 
-      {quota && (
-        <>
+      {quota && tone && (() => {
+        const { color: toneColor, label: toneLabel } = tone;
+        const isNearCap = toneLabel === "상한 임박";
+        return (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
             <MetricCard
               label="소장 도서 수"
@@ -128,7 +126,7 @@ export function DiscardedBooksPage() {
               label="금년 폐기 확정"
               value={quota.discardedCount.toLocaleString()}
               sub={`연간 한도 ${quota.capCount.toLocaleString()}권 대비`}
-              color={tone!.color}
+              color={toneColor}
               icon={Trash2}
             />
             <MetricCard
@@ -137,68 +135,69 @@ export function DiscardedBooksPage() {
               sub={
                 quota.capReached
                   ? "금년 폐기 한도 도달"
-                  : tone!.label === "상한 임박"
+                  : isNearCap
                     ? "상한 임박 · 서버 자동 검증"
                     : "서버 자동 검증"
               }
-              color={tone!.color}
-              icon={quota.capReached || tone!.label === "상한 임박" ? ShieldAlert : ShieldCheck}
+              color={toneColor}
+              icon={quota.capReached || isNearCap ? ShieldAlert : ShieldCheck}
             />
           </div>
-
-        </>
-      )}
+        );
+      })()}
 
       <Card className="p-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           {/* 좌측 영역: 필터 아이콘/문구 + 검색창 + 쿼타 현황 */}
-          <div className="flex flex-wrap items-center gap-4 flex-1 min-w-[240px]">
+          <div className="flex flex-wrap items-start sm:items-center gap-4 flex-1 min-w-[240px]">
 
-            {/* 1. 새로 추가된 [필터] 아이콘 및 문구 (맨 왼쪽) */}
             <div className="flex items-center gap-1.5 text-sm text-muted-foreground whitespace-nowrap">
               <ListFilter className="w-4 h-4" />
               <span>필터</span>
             </div>
 
-            {/* 2. 검색창 */}
-            <div className="relative">
+            {/* 검색창 */}
+            <div className="relative w-full sm:w-56">
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="text"
                 placeholder="제목 / ISBN…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-8 pr-3 py-2 text-sm rounded-md border border-border bg-background w-56 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                className="pl-8 pr-3 py-2 text-sm rounded-md border border-border bg-background w-full focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>
 
-            {/* 3. 쿼타 현황 */}
-            {quota && (
-              <div className="w-full sm:w-auto sm:min-w-[280px] max-w-xs flex flex-col gap-1.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs font-medium text-foreground">상한 대비 처리 현황</span>
-                  <span className="text-xs font-semibold whitespace-nowrap" style={{ color: tone!.color, fontFamily: "'JetBrains Mono', monospace" }}>
-                    {quota.discardedCount.toLocaleString()}/{quota.capCount.toLocaleString()} ({progressPct}%) · {tone!.label}
-                  </span>
+            {/* 쿼타 현황 */}
+            {quota && tone && (() => {
+              const { color: toneColor, label: toneLabel } = tone;
+              return (
+                <div className="w-full sm:w-auto sm:min-w-[280px] max-w-xs flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-foreground">상한 대비 처리 현황</span>
+                    <span className="text-xs font-semibold whitespace-nowrap" style={{ color: toneColor, fontFamily: "'JetBrains Mono', monospace" }}>
+                      {quota.discardedCount.toLocaleString()}/{quota.capCount.toLocaleString()} ({progressPct}%) · {toneLabel}
+                    </span>
+                  </div>
+                  <div className="h-2 rounded-full w-full overflow-hidden" style={{ backgroundColor: withAlpha(toneColor, 0.13) }}>
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{ width: `${progressPct}%`, backgroundColor: toneColor }}
+                    />
+                  </div>
+                  {quota.capReached && (
+                    <p className="text-xs mt-0.5" style={{ color: RED }}>
+                      연간 폐기 상한 도달로 신규 폐기 확정이 서버에서 거부됩니다. 초과가 필요하면 운영위원회 심의가 필요합니다 (시행령 [별표 7] 제3호 단서).
+                    </p>
+                  )}
+                  {!quota.capReached && toneLabel === "상한 임박" && (
+                    <p className="text-xs mt-0.5" style={{ color: AMBER }}>
+                      연간 폐기 상한의 85% 이상을 사용했습니다. 상한 도달 시 신규 폐기 확정이 서버에서 거부되니 잔여 건수를 미리 확인해 주세요.
+                    </p>
+                  )}
                 </div>
-                <div className="h-2 rounded-full w-full overflow-hidden" style={{ backgroundColor: withAlpha(tone!.color, 0.13) }}>
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{ width: `${progressPct}%`, backgroundColor: tone!.color }}
-                  />
-                </div>
-                {quota.capReached && (
-                  <p className="text-xs mt-0.5" style={{ color: RED }}>
-                    연간 폐기 상한 도달로 신규 폐기 확정이 서버에서 거부됩니다. 초과가 필요하면 운영위원회 심의가 필요합니다 (시행령 [별표 7] 제3호 단서).
-                  </p>
-                )}
-                {!quota.capReached && tone!.label === "상한 임박" && (
-                  <p className="text-xs mt-0.5" style={{ color: AMBER }}>
-                    연간 폐기 상한의 85% 이상을 사용했습니다. 상한 도달 시 신규 폐기 확정이 서버에서 거부되니 잔여 건수를 미리 확인해 주세요.
-                  </p>
-                )}
-              </div>
-            )}
+              );
+            })()}
           </div>
 
           {/* 우측 영역: 건수 표기 (오른쪽 밀착) */}
@@ -228,7 +227,7 @@ export function DiscardedBooksPage() {
               <tbody>
                 {paginated.map((book) => (
                   <tr key={book.bookId} className="border-b border-border hover:bg-muted/25 transition-colors">
-                    <td className="px-4 py-3 max-w-[260px]">
+                    <td className="px-4 py-3 max-w-[150px] sm:max-w-[220px] md:max-w-[260px]">
                       <p className="text-sm font-medium text-foreground truncate">{book.title}</p>
                       <p className="text-sm text-muted-foreground truncate">{book.author}</p>
                     </td>
@@ -253,8 +252,8 @@ export function DiscardedBooksPage() {
             </table>
           </div>
         )}
-        <div className="px-4 py-3 border-t border-border bg-muted/20 flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">{filtered.length}건 표시 중</span>
+        <div className="px-4 py-3 border-t border-border bg-muted/20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <span className="text-sm text-muted-foreground text-center sm:text-left">{filtered.length}건 표시 중</span>
           {totalPages > 1 && (() => {
             const WINDOW = 5;
             const start = Math.floor(page / WINDOW) * WINDOW;
@@ -262,29 +261,29 @@ export function DiscardedBooksPage() {
             const pages = Array.from({ length: end - start + 1 }, (_, i) => start + i);
 
             const navBtnClass =
-              "w-8 h-8 flex items-center justify-center rounded border border-border text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors";
+              "w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded border border-border text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex-shrink-0";
 
             return (
-              <div className="flex gap-1">
-                <button onClick={() => goToPage(0)} disabled={page === 0} className={navBtnClass} aria-label="처음 페이지">
+              <div className="flex gap-1 overflow-x-auto justify-center sm:justify-end">
+                <button onClick={() => setPage(0)} disabled={page === 0} className={navBtnClass} aria-label="처음 페이지">
                   <ChevronsLeft className="w-3.5 h-3.5" />
                 </button>
-                <button onClick={() => goToPage(page - 1)} disabled={page === 0} className={navBtnClass} aria-label="이전 페이지">
+                <button onClick={() => setPage(page - 1)} disabled={page === 0} className={navBtnClass} aria-label="이전 페이지">
                   <ChevronLeft className="w-3.5 h-3.5" />
                 </button>
 
                 {pages.map((p) => (
-                  <button key={p} onClick={() => goToPage(p)}
-                    className={`w-8 h-8 text-sm rounded border font-medium transition-colors
+                  <button key={p} onClick={() => setPage(p)}
+                    className={`w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0 text-sm rounded border font-medium transition-colors
           ${p === page ? "border-primary bg-primary text-white" : "border-border text-muted-foreground hover:bg-muted"}`}>
                     {p + 1}
                   </button>
                 ))}
 
-                <button onClick={() => goToPage(page + 1)} disabled={page === totalPages - 1} className={navBtnClass} aria-label="다음 페이지">
+                <button onClick={() => setPage(page + 1)} disabled={page === totalPages - 1} className={navBtnClass} aria-label="다음 페이지">
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
-                <button onClick={() => goToPage(totalPages - 1)} disabled={page === totalPages - 1} className={navBtnClass} aria-label="끝 페이지">
+                <button onClick={() => setPage(totalPages - 1)} disabled={page === totalPages - 1} className={navBtnClass} aria-label="끝 페이지">
                   <ChevronsRight className="w-3.5 h-3.5" />
                 </button>
               </div>

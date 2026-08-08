@@ -19,7 +19,7 @@ export interface TransferScoreDetails {
   spaceEfficiency: number;
 }
 
-// content[].alternatives[] 원소 — 동일 도서의 대안 매칭 후보 (scoreDetails는 내려오지 않음)
+// content[].alternatives[] 원소 — 동일 도서의 대안 매칭 후보
 export interface TransferAlternative {
   recommendationId: number;
   originLibrary: string;
@@ -28,6 +28,7 @@ export interface TransferAlternative {
   matchingScore: number;
   direction: TransferDirection;
   status: TransferStatus;
+  scoreDetails: TransferScoreDetails;
 }
 
 // GET /api/transfers 의 content[] 원소 — 이관 추천 1건
@@ -74,8 +75,7 @@ export interface TransferErrorState {
 }
 
 // RelocationPage 전용 "이관 실행 확인" 모달(TransferExecuteModal)에서 쓰는 대상 1건.
-// WearManagePage 등 다른 화면의 범용 확인 모달(ModalConfig/ConfirmModal)과는 분리된 타입으로,
-// 이관 도메인 정보(출발/도착, 거리, 매칭 스코어)를 그대로 실어 모달에서 재사용한다.
+// WearManagePage 등 다른 화면의 범용 확인 모달(ModalConfig/ConfirmModal)과는 분리된 타입으로, 이관 도메인 정보(출발/도착, 거리, 매칭 스코어)를 그대로 실어 모달에서 재사용한다.
 export interface TransferExecuteTarget {
   recommendationId: number;
   title: string;
@@ -83,7 +83,7 @@ export interface TransferExecuteTarget {
   to: string;
   distance: number;
   score: number;
-  scoreDetails?: TransferScoreDetails;
+  scoreDetails: TransferScoreDetails;
 }
 
 // TransferExecuteModal에 넘기는 설정. targets가 1건이면 단건 실행, 2건 이상이면 일괄 실행 UI로 표시된다.
@@ -93,15 +93,14 @@ export interface TransferExecuteModalConfig {
 }
 
 // 화면(RelocationPage) 표시용 뷰 모델
-// API 응답 필드명을 화면에서 쓰기 좋은 이름으로 옮겨 담은 형태.
-// alternatives도 동일한 후보 형태(RelocationCandidate)로 맞춰서, 메인 추천/대안 추천 행을 같은 컴포넌트(RelocationRowCells)로 렌더링할 수 있게 한다.
-// 다만 alternatives는 scoreDetails가 없다.
+// alternatives도 scoreDetails를 포함해 동일한 후보 형태(RelocationCandidate)로 맞춰서, 메인 추천/대안 추천 행을 같은 컴포넌트(RelocationRowCells)로 렌더링할 수 있게 한다.
 export interface RelocationCandidate {
   recommendationId: number;
   from: string;
   to: string;
   distance: number;
   score: number;
+  scoreDetails: TransferScoreDetails;
   hubDirection: TransferDirection;
   status: TransferStatus;
 }
@@ -109,7 +108,6 @@ export interface RelocationCandidate {
 export interface RelocationItem extends RelocationCandidate {
   title: string;
   genre: string;
-  scoreDetails: TransferScoreDetails;
   alternatives: RelocationCandidate[];
 }
 
@@ -120,6 +118,7 @@ function mapCandidate(a: TransferAlternative): RelocationCandidate {
     to: a.destLibrary,
     distance: a.distanceKm,
     score: a.matchingScore,
+    scoreDetails: a.scoreDetails,
     hubDirection: a.direction,
     status: a.status,
   };

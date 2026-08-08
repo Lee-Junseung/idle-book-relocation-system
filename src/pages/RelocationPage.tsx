@@ -8,7 +8,6 @@ import {
 
 import { Card, SectionHeader, ScoreStackBar, TransferExecuteModal, withAlpha } from "../components";
 import { NAV, BLUE, GREEN, RED } from "../constants/colors";
-// import { AMBER } from "../constants/colors";
 import { getTransferListApi, executeTransferApi } from "../api/transfers";
 import { ApiError } from "../api/client";
 import {
@@ -18,7 +17,6 @@ import {
   TransferErrorState,
   TransferExecuteModalConfig,
   TransferExecuteTarget,
-  TransferScoreDetails,
   mapToRelocationItem,
 } from "../types/transfers";
 
@@ -27,8 +25,8 @@ import { CURRENT_LIBRARY } from "../constants/library";
 const PAGE_SIZE = 10;
 
 // 메인 추천 행과 대안 후보(alternatives) 행을 같은 셀 레이아웃으로 그리기 위한 공통 타입.
-// 대안 후보는 서버가 scoreDetails를 내려주지 않으므로 optional.
-type RowLike = RelocationCandidate & { scoreDetails?: TransferScoreDetails };
+// 서버가 메인 추천/대안 후보 모두 scoreDetails를 내려주므로 RelocationCandidate를 그대로 사용한다.
+type RowLike = RelocationCandidate;
 
 function statusMeta(status: RowLike["status"]) {
   switch (status) {
@@ -48,7 +46,7 @@ function RelocationRowCells({ row, onExecute }: { row: RowLike; onExecute: (row:
   const { label, className, Icon } = statusMeta(row.status);
   return (
     <>
-      <td className="px-3 py-2.5 max-w-[160px]">
+      <td className="px-3 sm:px-4 py-2.5 max-w-[160px]">
         <div className="flex items-center gap-1 text-xs whitespace-nowrap">
           <span className={`truncate ${isFrom ? "font-semibold" : "text-muted-foreground"}`} style={isFrom ? { color: NAV } : {}}>
             {isFrom && <Pin className="w-2.5 h-2.5 inline mr-0.5" />}{row.from}
@@ -59,9 +57,9 @@ function RelocationRowCells({ row, onExecute }: { row: RowLike; onExecute: (row:
           </span>
         </div>
       </td>
-      <td className="hidden lg:table-cell px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{row.distance} km</td>
-      <td className="px-3 py-2.5"><ScoreStackBar score={row.score} scoreDetails={row.scoreDetails} /></td>
-      <td className="hidden xl:table-cell px-3 py-2.5">
+      <td className="hidden lg:table-cell px-3 sm:px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{row.distance} km</td>
+      <td className="px-3 sm:px-4 py-2.5"><ScoreStackBar score={row.score} scoreDetails={row.scoreDetails} /></td>
+      <td className="hidden xl:table-cell px-3 sm:px-4 py-2.5">
         {row.hubDirection === "발신" ? (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap"
             style={{ backgroundColor: withAlpha(BLUE, 0.08), color: BLUE, border: `1px solid ${withAlpha(BLUE, 0.19)}` }}>
@@ -76,12 +74,12 @@ function RelocationRowCells({ row, onExecute }: { row: RowLike; onExecute: (row:
           </span>
         )}
       </td>
-      <td className="px-3 py-2.5">
+      <td className="px-3 sm:px-4 py-2.5">
         <span className={`flex items-center gap-1 text-[11px] font-medium whitespace-nowrap ${className}`}>
           <Icon className="w-3 h-3 flex-shrink-0" />{label}
         </span>
       </td>
-      <td className="px-2 sm:px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
+      <td className="px-2 sm:px-4 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
         {!disabled && (
           <button onClick={() => onExecute(row)}
             className="flex items-center gap-1 px-1.5 sm:px-2.5 py-1 rounded text-white text-[11px] font-medium ml-auto hover:opacity-80 whitespace-nowrap"
@@ -95,8 +93,7 @@ function RelocationRowCells({ row, onExecute }: { row: RowLike; onExecute: (row:
 }
 
 // 상세 파트(메인 추천) 1건 + 대안 후보(alternatives) 여러 건이 같은 도서를 두고 경쟁하는 한 세트다.
-// 이 중 하나라도 이관을 실행하면 나머지 후보는 더 이상 유효하지 않으므로, 새로고침 없이도
-// 즉시 "완료" 상태로 표시하고 실행 버튼이 사라지도록 로컬 상태를 낙관적으로 먼저 갱신한다.
+// 이 중 하나라도 이관을 실행하면 나머지 후보는 더 이상 유효하지 않으므로, 새로고침 없이도 즉시 "완료" 상태로 표시하고 실행 버튼이 사라지도록 로컬 상태를 낙관적으로 먼저 갱신한다.
 function applyExecutionResult(list: RelocationItem[], executedIds: Set<number>): RelocationItem[] {
   return list.map((item) => {
     const mainExecuted = executedIds.has(item.recommendationId);
@@ -113,10 +110,9 @@ function applyExecutionResult(list: RelocationItem[], executedIds: Set<number>):
   });
 }
 
-// 방금 실행한 세트는 메인 추천 status가 COMPLETED로 바뀌어 다음 목록 재조회(status=PENDING,IN_TRANSIT
-// 필터) 응답에서 통째로 빠질 수 있다. 재조회 결과에서 빠졌다고 화면에서 바로 사라져 버리면
-// "나머지는 완료 상태로 표시"라는 요구가 재조회 한 번에 무너지므로, 방금 실행으로 종료된 세트는
-// 낙관적으로 갱신했던 결과를 그대로 화면에 남겨둔다(다음 페이지 이동/새로고침 시에는 서버 응답을 따른다).
+// 방금 실행한 세트는 메인 추천 status가 COMPLETED로 바뀌어 다음 목록 재조회(status=PENDING,IN_TRANSIT 필터) 응답에서 통째로 빠질 수 있다.
+// 재조회 결과에서 빠졌다고 화면에서 바로 사라져 버리면 "나머지는 완료 상태로 표시"라는 요구가 재조회 한 번에 무너지므로, 방금 실행으로 종료된 세트는 낙관적으로 갱신했던 결과를 그대로 화면에 남겨둔다
+// (다음 페이지 이동/새로고침 시에는 서버 응답을 따른다).
 function mergeAfterRefetch(
   fresh: RelocationItem[],
   prevPatched: RelocationItem[] | null,
@@ -141,7 +137,7 @@ export function RelocationPage() {
   const [items, setItems] = useState<RelocationItem[] | null>(null);
   const [summary, setSummary] = useState({ totalPending: 0, totalSent: 0, totalReceived: 0 });
   const [page, setPage] = useState(0);
-  const [pageInfo, setPageInfo] = useState({ totalPages: 1, totalElements: 0 });
+  const [pageInfo, setPageInfo] = useState({ totalPages: 1 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<TransferErrorState | null>(null);
   const [execError, setExecError] = useState<TransferErrorState | null>(null);
@@ -153,8 +149,8 @@ export function RelocationPage() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   // 이관 추천 목록 조회 (GET /api/transfers?status=PENDING,IN_TRANSIT&page=&size=)
-  // executedIds: 방금 이관 실행이 일어난 recommendationId 집합. 지정하면 재조회 응답에서
-  // 빠진 항목이라도(완료되어 필터에서 제외된 경우) 화면에서 곧바로 사라지지 않도록 보존한다.
+  // executedIds: 방금 이관 실행이 일어난 recommendationId 집합.
+  // 지정하면 재조회 응답에서 빠진 항목이라도(완료되어 필터에서 제외된 경우) 화면에서 곧바로 사라지지 않도록 보존한다.
   const fetchQueue = useCallback(async (targetPage = 0, executedIds: Set<number> = new Set()) => {
     setError(null);
     try {
@@ -162,7 +158,7 @@ export function RelocationPage() {
       const fresh = json.content.map(mapToRelocationItem);
       setItems((prev) => mergeAfterRefetch(fresh, prev, executedIds));
       setSummary(json.summary);
-      setPageInfo({ totalPages: json.totalPages, totalElements: json.totalElements });
+      setPageInfo({ totalPages: json.totalPages });
       setPage(json.pageable.pageNumber);
     } catch (e) {
       if (e instanceof ApiError) {
@@ -215,17 +211,21 @@ export function RelocationPage() {
     setExecuting(false);
   };
 
+  // RowLike(메인 추천/대안 후보 행)를 모달에 넘길 TransferExecuteTarget 형태로 변환.
+  // 단건/일괄 실행 모두 동일한 필드 매핑을 쓰므로 공통 헬퍼로 묶는다.
+  const toExecuteTarget = (row: RowLike, title: string): TransferExecuteTarget => ({
+    recommendationId: row.recommendationId,
+    title,
+    from: row.from,
+    to: row.to,
+    distance: row.distance,
+    score: row.score,
+    scoreDetails: row.scoreDetails,
+  });
+
   const requestExecuteRow = (row: RowLike, title: string) => {
     setModal({
-      targets: [{
-        recommendationId: row.recommendationId,
-        title,
-        from: row.from,
-        to: row.to,
-        distance: row.distance,
-        score: row.score,
-        scoreDetails: row.scoreDetails,
-      }],
+      targets: [toExecuteTarget(row, title)],
       onConfirm: () => { void doExecute([row.recommendationId]); },
     });
   };
@@ -235,15 +235,7 @@ export function RelocationPage() {
     const targets: TransferExecuteTarget[] = ids
       .map((id) => items?.find((it) => it.recommendationId === id))
       .filter((it): it is RelocationItem => !!it)
-      .map((it) => ({
-        recommendationId: it.recommendationId,
-        title: it.title,
-        from: it.from,
-        to: it.to,
-        distance: it.distance,
-        score: it.score,
-        scoreDetails: it.scoreDetails,
-      }));
+      .map((it) => toExecuteTarget(it, it.title));
     setModal({ targets, onConfirm: () => { void doExecute(ids); } });
   };
 
@@ -276,10 +268,11 @@ export function RelocationPage() {
           title="이관 우선순위 목록"
           sub="매칭 스코어 기반 이관 우선순위">
           <button onClick={requestExecuteSelected} disabled={selected.size === 0 || executing}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-md text-sm font-medium text-white disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
             style={{ backgroundColor: NAV }}>
             {executing ? <Loader2 className="w-3.5 h-3.5 flex-shrink-0 animate-spin" /> : <Truck className="w-3.5 h-3.5 flex-shrink-0" />}
-            일괄 이관 ({selected.size})
+            <span className="hidden sm:inline">일괄 이관 ({selected.size})</span>
+            <span className="sm:hidden">이관 ({selected.size})</span>
           </button>
         </SectionHeader>
 
@@ -294,7 +287,7 @@ export function RelocationPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
             { label: "총 대기 건수", value: summary.totalPending, color: NAV, unit: "건" },
             { label: "이번달 발신 건수", value: summary.totalSent, color: BLUE, unit: "건" },
@@ -309,8 +302,8 @@ export function RelocationPage() {
           ))}
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1 bg-card border border-border rounded p-0.5">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <div className="flex items-center gap-1 bg-card border border-border rounded p-0.5 w-fit">
             {(["전체", "발신", "수신"] as const).map((d) => (
               <button key={d} onClick={() => setDirFilter(d)}
                 className={`px-2.5 py-1 rounded text-xs font-medium transition-colors whitespace-nowrap ${dirFilter === d ? "text-white" : "text-muted-foreground hover:bg-muted"}`}
@@ -320,7 +313,7 @@ export function RelocationPage() {
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-3 ml-auto text-[11px] text-muted-foreground whitespace-nowrap">
+          <div className="flex items-center gap-3 sm:ml-auto text-[11px] text-muted-foreground whitespace-nowrap flex-wrap">
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" />대기</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-600" />이송중</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-600" />완료</span>
@@ -332,7 +325,7 @@ export function RelocationPage() {
             <table className="w-full">
               <thead className="bg-muted/40">
                 <tr className="border-b border-border">
-                  <th className="w-9 px-3 py-2.5">
+                  <th className="w-9 px-3 sm:px-4 py-2.5">
                     <input type="checkbox" checked={allSel} onChange={toggleAll} className="rounded accent-primary" />
                   </th>
                   {[
@@ -344,14 +337,14 @@ export function RelocationPage() {
                     { label: "방향", hide: "hidden xl:table-cell" },
                     { label: "상태", hide: "" },
                   ].map((h, i) => (
-                    <th key={i} className={`px-3 py-2.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap ${h.hide}`}>{h.label}</th>
+                    <th key={i} className={`px-3 sm:px-4 py-2.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap ${h.hide}`}>{h.label}</th>
                   ))}
-                  <th className="px-3 py-2.5 text-right text-[11px] font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">사서 결정</th>
+                  <th className="px-3 sm:px-4 py-2.5 text-right text-[11px] font-semibold text-muted-foreground uppercase tracking-wider whitespace-nowrap">사서 결정</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 && (
-                  <tr><td colSpan={9} className="px-3 py-10 text-center text-sm text-muted-foreground">표시할 이관 후보가 없습니다.</td></tr>
+                  <tr><td colSpan={9} className="px-3 sm:px-4 py-10 text-center text-sm text-muted-foreground">표시할 이관 후보가 없습니다.</td></tr>
                 )}
                 {filtered.map((item) => {
                   const disabled = item.status !== "PENDING";
@@ -364,17 +357,17 @@ export function RelocationPage() {
                         className={`border-b border-border last:border-0 transition-colors cursor-pointer
                         ${isOpen ? "bg-blue-50" : isSel ? "bg-blue-50" : "hover:bg-muted/30"} ${disabled ? "opacity-50" : ""}`}
                         style={isOpen ? { borderLeft: `2px solid ${NAV}`, borderBottom: "none" } : {}}>
-                        <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                        <td className="px-3 sm:px-4 py-2.5" onClick={(e) => e.stopPropagation()}>
                           <input type="checkbox" checked={isSel} disabled={disabled} onChange={() => toggleSel(item.recommendationId)} className="rounded accent-primary" />
                         </td>
-                        <td className="px-3 py-2.5">
+                        <td className="px-3 sm:px-4 py-2.5">
                           <div className="p-1 rounded">
                             {isOpen
                               ? <ChevronUp className="w-4 h-4" style={{ color: NAV }} />
                               : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
                           </div>
                         </td>
-                        <td className="px-3 py-2.5 max-w-[200px]">
+                        <td className="px-3 sm:px-4 py-2.5 max-w-[160px] sm:max-w-[200px]">
                           <p className="text-xs font-medium text-foreground truncate">{item.title}</p>
                           <p className="text-[11px] text-muted-foreground truncate">{item.genre}</p>
                         </td>
@@ -383,14 +376,14 @@ export function RelocationPage() {
 
                       {isOpen && item.alternatives.length === 0 && (
                         <tr className="border-b border-border last:border-0 bg-blue-50/40" style={{ borderLeft: `2px solid ${NAV}` }}>
-                          <td colSpan={9} className="px-3 py-2.5 text-[11px] text-muted-foreground">다른 대안 후보가 없습니다.</td>
+                          <td colSpan={9} className="px-3 sm:px-4 py-2.5 text-[11px] text-muted-foreground">다른 대안 후보가 없습니다.</td>
                         </tr>
                       )}
                       {isOpen && item.alternatives.map((alt) => (
                         <tr key={`alt-${item.recommendationId}-${alt.recommendationId}`}
                           className="border-b border-border last:border-0 bg-blue-50/40"
                           style={{ borderLeft: `2px solid ${NAV}` }}>
-                          <td colSpan={3} className="px-3 py-2.5"></td>
+                          <td colSpan={3} className="px-3 sm:px-4 py-2.5"></td>
                           <RelocationRowCells row={alt} onExecute={(row) => requestExecuteRow(row, item.title)} />
                         </tr>
                       ))}
@@ -400,47 +393,50 @@ export function RelocationPage() {
               </tbody>
             </table>
           </div>
-          <div className="px-4 py-3 border-t border-border bg-muted/20 flex flex-wrap items-center gap-4">
-            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">매칭 스코어 산출식:</span>
-            <span className="text-[11px] text-muted-foreground">
-              M = 거리 감쇄(30%) + 장르 수요도(25%) + 수급 불일치 해소(25%) + 공간 효율성(20%)
-            </span>
-          </div>
-          {pageInfo.totalPages > 1 && (() => {
-            const WINDOW = 5;
-            const start = Math.floor(page / WINDOW) * WINDOW;
-            const end = Math.min(pageInfo.totalPages - 1, start + WINDOW - 1);
-            const pages = Array.from({ length: end - start + 1 }, (_, i) => start + i);
+          <div className="px-3 sm:px-4 py-3 border-t border-border bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            {/* 산출식 설명은 보조 정보라 좁은 화면에서는 숨기고, 필요하면 스코어 바 툴팁으로 확인 */}
+            <div className="hidden sm:flex items-center gap-2 text-[11px] text-muted-foreground min-w-0">
+              <span className="font-semibold uppercase tracking-wide whitespace-nowrap">매칭 스코어 산출식:</span>
+              <span className="truncate">
+                M = 거리 감쇄(30%) + 장르 수요도(25%) + 수급 불일치 해소(25%) + 공간 효율성(20%)
+              </span>
+            </div>
+            {pageInfo.totalPages > 1 && (() => {
+              const WINDOW = 5;
+              const start = Math.floor(page / WINDOW) * WINDOW;
+              const end = Math.min(pageInfo.totalPages - 1, start + WINDOW - 1);
+              const pages = Array.from({ length: end - start + 1 }, (_, i) => start + i);
 
-            const navBtnClass =
-              "w-8 h-8 flex items-center justify-center rounded border border-border text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors";
+              const navBtnClass =
+                "w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded border border-border text-muted-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors flex-shrink-0";
 
-            return (
-              <div className="px-4 py-3 border-t border-border bg-muted/20 flex items-center justify-end gap-1">
-                <button onClick={() => goToPage(0)} disabled={executing || page === 0} className={navBtnClass} aria-label="처음 페이지">
-                  <ChevronsLeft className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => goToPage(page - 1)} disabled={executing || page === 0} className={navBtnClass} aria-label="이전 페이지">
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                </button>
-
-                {pages.map((p) => (
-                  <button key={p} onClick={() => goToPage(p)} disabled={executing}
-                    className={`w-8 h-8 text-sm rounded border font-medium transition-colors disabled:opacity-50
-            ${p === page ? "border-primary bg-primary text-white" : "border-border text-muted-foreground hover:bg-muted"}`}>
-                    {p + 1}
+              return (
+                <div className="flex gap-1 overflow-x-auto justify-center sm:justify-end">
+                  <button onClick={() => goToPage(0)} disabled={executing || page === 0} className={navBtnClass} aria-label="처음 페이지">
+                    <ChevronsLeft className="w-3.5 h-3.5" />
                   </button>
-                ))}
+                  <button onClick={() => goToPage(page - 1)} disabled={executing || page === 0} className={navBtnClass} aria-label="이전 페이지">
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
 
-                <button onClick={() => goToPage(page + 1)} disabled={executing || page === pageInfo.totalPages - 1} className={navBtnClass} aria-label="다음 페이지">
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => goToPage(pageInfo.totalPages - 1)} disabled={executing || page === pageInfo.totalPages - 1} className={navBtnClass} aria-label="끝 페이지">
-                  <ChevronsRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            );
-          })()}
+                  {pages.map((p) => (
+                    <button key={p} onClick={() => goToPage(p)} disabled={executing}
+                      className={`w-7 h-7 sm:w-8 sm:h-8 flex-shrink-0 text-sm rounded border font-medium transition-colors disabled:opacity-50
+            ${p === page ? "border-primary bg-primary text-white" : "border-border text-muted-foreground hover:bg-muted"}`}>
+                      {p + 1}
+                    </button>
+                  ))}
+
+                  <button onClick={() => goToPage(page + 1)} disabled={executing || page === pageInfo.totalPages - 1} className={navBtnClass} aria-label="다음 페이지">
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                  <button onClick={() => goToPage(pageInfo.totalPages - 1)} disabled={executing || page === pageInfo.totalPages - 1} className={navBtnClass} aria-label="끝 페이지">
+                    <ChevronsRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              );
+            })()}
+          </div>
         </Card>
       </div>
     </>

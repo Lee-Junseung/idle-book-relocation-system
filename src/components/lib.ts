@@ -3,7 +3,6 @@ import { DOT_COLORS, DOT_LABELS } from "../constants/colors";
 import { clampToScore } from "../constants/checklistItems";
 import { hashCode } from "../api/client";
 import { Book, LoanHistoryPoint } from "../types";
-import { TransferScoreDetails } from "../types/transfers";
 
 // DOT_COLORS[0] === "" (미평가/값 없음 상태)이거나 배열 범위를 벗어난 인덱스일 때 쓰는 중립색
 const NEUTRAL_COLOR = "#9CA3AF";
@@ -42,25 +41,14 @@ export function getDotLabel(level: number): string {
 }
 
 // 매칭 스코어 가중치 (거리 감쇄 30% + 도서 수요도 25% + 수급 불일치 해소 25% + 공간 효율성 20%).
-// RelocationPage 하단의 "매칭 스코어 산출식" 문구와 동일한 값을 단일 출처로 유지한다.
+// RelocationPage 하단의 "매칭 스코어 산출식" 문구와 동일한 값을 나타내는 참고용 상수.
+// (서버가 메인 추천/대안 후보 모두 scoreDetails를 내려주므로, 더 이상 이 값으로 점수를 역산하지는 않는다.)
 export const TRANSFER_SCORE_WEIGHTS = {
   distanceDecay: 0.3,
   bookDemand: 0.25,
   shortageResolution: 0.25,
   spaceEfficiency: 0.2,
 } as const;
-
-// 상세(펼침) 화면에서도 표가 항상 보이도록, 고정 가중치 비율로 최종 점수를 항목별로 나눈 "추정치"를 만들어 폴백으로 사용한다.
-// 서버가 내려주는 정확한 산출 근거가 아니므로, 사용하는 쪽(ScoreStackBar)에서 반드시 추정치임을 표시해야 한다.
-export function estimateTransferScoreDetails(score: number): TransferScoreDetails {
-  const round1 = (n: number) => Math.round(n * 10) / 10;
-  return {
-    distanceDecay: round1(score * TRANSFER_SCORE_WEIGHTS.distanceDecay),
-    bookDemand: round1(score * TRANSFER_SCORE_WEIGHTS.bookDemand),
-    shortageResolution: round1(score * TRANSFER_SCORE_WEIGHTS.shortageResolution),
-    spaceEfficiency: round1(score * TRANSFER_SCORE_WEIGHTS.spaceEfficiency),
-  };
-}
 
 // 마모 점검/이관 판단에 쓰는 기준일 계산 및 월별 대출량 추정 데이터 생성 유틸
 // 전역 "데이터 기준일" — 이 값이 이 프로젝트에서 기준일을 정의하는 단일 출처(source of truth)이며, App.tsx 헤더에 표시되는 날짜도 이 값에서 파생시켜야 한다.

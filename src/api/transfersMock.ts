@@ -19,8 +19,8 @@ const MOCK_RECORDS: TransferRecommendation[] = [
     direction: "발신", status: "PENDING",
     scoreDetails: { distanceDecay: 22.5, bookDemand: 30.0, shortageResolution: 22.5, spaceEfficiency: 17.0 },
     alternatives: [
-      { recommendationId: nextId(), originLibrary: "북수원도서관", destLibrary: "수원시립중앙도서관", distanceKm: 11.2, matchingScore: 78, direction: "발신", status: "PENDING" },
-      { recommendationId: nextId(), originLibrary: "북수원도서관", destLibrary: "권선도서관", distanceKm: 13.4, matchingScore: 65, direction: "발신", status: "PENDING" },
+      { recommendationId: nextId(), originLibrary: "북수원도서관", destLibrary: "수원시립중앙도서관", distanceKm: 11.2, matchingScore: 78, direction: "발신", status: "PENDING", scoreDetails: { distanceDecay: 20.5, bookDemand: 25.0, shortageResolution: 18.0, spaceEfficiency: 14.5 } },
+      { recommendationId: nextId(), originLibrary: "북수원도서관", destLibrary: "권선도서관", distanceKm: 13.4, matchingScore: 65, direction: "발신", status: "PENDING", scoreDetails: { distanceDecay: 16.0, bookDemand: 20.0, shortageResolution: 16.5, spaceEfficiency: 12.5 } },
     ],
   },
   {
@@ -29,7 +29,7 @@ const MOCK_RECORDS: TransferRecommendation[] = [
     direction: "발신", status: "PENDING",
     scoreDetails: { distanceDecay: 25.0, bookDemand: 27.0, shortageResolution: 20.0, spaceEfficiency: 16.0 },
     alternatives: [
-      { recommendationId: nextId(), originLibrary: "북수원도서관", destLibrary: "광교도서관", distanceKm: 7.6, matchingScore: 70, direction: "발신", status: "PENDING" },
+      { recommendationId: nextId(), originLibrary: "북수원도서관", destLibrary: "광교도서관", distanceKm: 7.6, matchingScore: 70, direction: "발신", status: "PENDING", scoreDetails: { distanceDecay: 19.0, bookDemand: 22.0, shortageResolution: 16.0, spaceEfficiency: 13.0 } },
     ],
   },
   {
@@ -38,8 +38,8 @@ const MOCK_RECORDS: TransferRecommendation[] = [
     direction: "수신", status: "PENDING",
     scoreDetails: { distanceDecay: 21.0, bookDemand: 24.5, shortageResolution: 23.0, spaceEfficiency: 12.5 },
     alternatives: [
-      { recommendationId: nextId(), originLibrary: "권선도서관", destLibrary: "망포도서관", distanceKm: 9.9, matchingScore: 59, direction: "수신", status: "PENDING" },
-      { recommendationId: nextId(), originLibrary: "권선도서관", destLibrary: "영통도서관", distanceKm: 12.1, matchingScore: 52, direction: "수신", status: "PENDING" },
+      { recommendationId: nextId(), originLibrary: "권선도서관", destLibrary: "망포도서관", distanceKm: 9.9, matchingScore: 59, direction: "수신", status: "PENDING", scoreDetails: { distanceDecay: 15.0, bookDemand: 17.0, shortageResolution: 15.5, spaceEfficiency: 11.5 } },
+      { recommendationId: nextId(), originLibrary: "권선도서관", destLibrary: "영통도서관", distanceKm: 12.1, matchingScore: 52, direction: "수신", status: "PENDING", scoreDetails: { distanceDecay: 13.0, bookDemand: 15.0, shortageResolution: 14.0, spaceEfficiency: 10.0 } },
     ],
   },
   {
@@ -55,7 +55,7 @@ const MOCK_RECORDS: TransferRecommendation[] = [
     direction: "수신", status: "PENDING",
     scoreDetails: { distanceDecay: 18.0, bookDemand: 20.5, shortageResolution: 21.0, spaceEfficiency: 11.5 },
     alternatives: [
-      { recommendationId: nextId(), originLibrary: "망포도서관", destLibrary: "권선도서관", distanceKm: 10.7, matchingScore: 48, direction: "수신", status: "PENDING" },
+      { recommendationId: nextId(), originLibrary: "망포도서관", destLibrary: "권선도서관", distanceKm: 10.7, matchingScore: 48, direction: "수신", status: "PENDING", scoreDetails: { distanceDecay: 12.0, bookDemand: 14.0, shortageResolution: 13.0, spaceEfficiency: 9.0 } },
     ],
   },
   {
