@@ -2,7 +2,7 @@
 import { useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { TransferScoreDetails } from "../types/transfers";
-import { NAV, BLUE, TEAL, AMBER, GREEN } from "../constants/colors";
+import { NAV, BLUE, PURPLE, AMBER, GREEN } from "../constants/colors";
 
 const TOOLTIP_WIDTH = 224;
 const TOOLTIP_MARGIN = 8;
@@ -21,7 +21,7 @@ export function ScoreStackBar({ score, scoreDetails }: { score: number; scoreDet
 
   const rows = [
     { label: "거리 감쇄", weight: "×0.30", contrib: scoreDetails.distanceDecay, color: BLUE },
-    { label: "도서 수요도", weight: "×0.25", contrib: scoreDetails.bookDemand, color: TEAL },
+    { label: "도서 수요도", weight: "×0.25", contrib: scoreDetails.bookDemand, color: PURPLE },
     { label: "수급 불일치 해소", weight: "×0.25", contrib: scoreDetails.shortageResolution, color: AMBER },
     { label: "공간 효율성", weight: "×0.20", contrib: scoreDetails.spaceEfficiency, color: GREEN },
   ];
@@ -133,7 +133,7 @@ export function ScoreStackBar({ score, scoreDetails }: { score: number; scoreDet
           </div>
           <div className="mt-2 flex items-center gap-2 flex-wrap text-[9px] text-muted-foreground">
             <span className="flex items-center gap-1"><span className="w-2 h-1.5 rounded-sm" style={{ backgroundColor: BLUE }} />거리감쇄</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-1.5 rounded-sm" style={{ backgroundColor: TEAL }} />수요도</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-1.5 rounded-sm" style={{ backgroundColor: PURPLE }} />수요도</span>
             <span className="flex items-center gap-1"><span className="w-2 h-1.5 rounded-sm" style={{ backgroundColor: AMBER }} />불일치해소</span>
             <span className="flex items-center gap-1"><span className="w-2 h-1.5 rounded-sm" style={{ backgroundColor: GREEN }} />공간효율성</span>
           </div>

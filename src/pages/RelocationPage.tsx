@@ -287,15 +287,15 @@ export function RelocationPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
           {[
             { label: "총 대기 건수", value: summary.totalPending, color: NAV, unit: "건" },
             { label: "이번달 발신 건수", value: summary.totalSent, color: BLUE, unit: "건" },
             { label: "이번달 수신 건수", value: summary.totalReceived, color: GREEN, unit: "건" },
           ].map((s) => (
-            <Card key={s.label} className="p-3 flex flex-col gap-1">
-              <span className="text-[11px] text-muted-foreground">{s.label}</span>
-              <span className="text-xl font-semibold" style={{ color: s.color, fontFamily: "'JetBrains Mono', monospace" }}>
+            <Card key={s.label} className="p-2 sm:p-3 flex flex-col gap-1 min-w-0">
+              <span className="text-[10px] sm:text-[11px] text-muted-foreground truncate">{s.label}</span>
+              <span className="text-base sm:text-xl font-semibold truncate" style={{ color: s.color, fontFamily: "'JetBrains Mono', monospace" }}>
                 {s.value}{s.unit}
               </span>
             </Card>
